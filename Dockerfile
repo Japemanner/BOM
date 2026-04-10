@@ -38,6 +38,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/src/db/migrations ./src/db/migrations
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
 USER nextjs
 
@@ -46,4 +47,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Voer migraties uit en start de Next.js server
-CMD ["sh", "-c", "node_modules/.bin/drizzle-kit migrate && node server.js"]
+CMD ["sh", "-c", "node_modules/.bin/drizzle-kit migrate --config drizzle.config.ts && node server.js"]
