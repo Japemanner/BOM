@@ -15,6 +15,9 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Zorg dat public/ en migrations/ altijd bestaan
+RUN mkdir -p public src/db/migrations
+
 RUN npm run build
 
 # Runner fase (productie)
@@ -27,6 +30,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Non-root gebruiker
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+RUN mkdir -p public src/db/migrations
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
