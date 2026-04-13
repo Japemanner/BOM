@@ -47,4 +47,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Voer migraties uit en start de Next.js server
-CMD ["sh", "-c", "node_modules/.bin/drizzle-kit migrate --config drizzle.config.ts && node server.js"]
+CMD ["sh", "-c", "timeout 30 node_modules/.bin/drizzle-kit migrate --config drizzle.config.ts; echo 'Migratie klaar, server starten...'; node server.js"]
