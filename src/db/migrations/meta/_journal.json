@@ -15,6 +15,13 @@
       "when": 1776081058399,
       "tag": "0001_modern_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776084517174,
+      "tag": "0002_robust_wendell_vaughn",
+      "breakpoints": true
     }
   ]
 }

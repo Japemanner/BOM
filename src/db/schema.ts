@@ -22,8 +22,9 @@ import {
 // pgvector extensie voor toekomstige RAG:
 // CREATE EXTENSION IF NOT EXISTS vector;
 
+// Better Auth genereert eigen text IDs — geen uuid() hier
 export const users = pgTable('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   emailVerified: boolean('email_verified').notNull().default(false),
@@ -45,7 +46,7 @@ export const tenantUsers = pgTable('tenant_users', {
   tenantId: uuid('tenant_id')
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id')
+  userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   role: text('role').$type<UserRole>().notNull().default(UserRole.MEMBER),
@@ -101,7 +102,7 @@ export const reviewItems = pgTable('review_items', {
   metadata: jsonb('metadata').notNull().default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   resolvedAt: timestamp('resolved_at'),
-  resolvedBy: uuid('resolved_by').references(() => users.id),
+  resolvedBy: text('resolved_by').references(() => users.id),
 })
 
 export const integrations = pgTable('integrations', {
@@ -120,10 +121,10 @@ export const integrations = pgTable('integrations', {
 
 // Better Auth vereiste tabellen
 export const accounts = pgTable('accounts', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: text('id').primaryKey(),
   accountId: text('account_id').notNull(),
   providerId: text('provider_id').notNull(),
-  userId: uuid('user_id')
+  userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   accessToken: text('access_token'),
@@ -138,20 +139,20 @@ export const accounts = pgTable('accounts', {
 })
 
 export const sessions = pgTable('sessions', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: text('id').primaryKey(),
   expiresAt: timestamp('expires_at').notNull(),
   token: text('token').notNull().unique(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  userId: uuid('user_id')
+  userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
 })
 
 export const verifications = pgTable('verifications', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
   expiresAt: timestamp('expires_at').notNull(),
