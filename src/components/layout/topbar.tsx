@@ -1,24 +1,17 @@
 'use client'
 
-import { Bell, ChevronDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Mail } from 'lucide-react'
 
 interface TopbarProps {
+  title?: string
   userName?: string
-  tenantName?: string
+  openReviewCount?: number
 }
 
 export function Topbar({
+  title = 'Dashboard',
   userName = 'Gebruiker',
-  tenantName = 'Mijn organisatie',
+  openReviewCount = 0,
 }: TopbarProps) {
   const initials = userName
     .split(' ')
@@ -27,61 +20,113 @@ export function Topbar({
     .toUpperCase()
     .slice(0, 2)
 
-  const handleSignOut = () => {
-    void fetch('/api/auth/sign-out', { method: 'POST' }).then(() => {
-      window.location.href = '/login'
-    })
-  }
-
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
-      {/* Links: tenant naam + live indicator */}
-      <div className="flex items-center gap-4">
-        <span className="text-sm font-medium text-slate-700">{tenantName}</span>
+    <header
+      style={{
+        height: 48,
+        background: '#fff',
+        borderBottom: '1px solid #E2E8F0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 20px',
+        flexShrink: 0,
+      }}
+    >
+      {/* Links: paginatitel */}
+      <h1 style={{ fontSize: 14, fontWeight: 500, color: '#0F172A', margin: 0 }}>
+        {title}
+      </h1>
 
-        <div className="flex items-center gap-1.5">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-          </span>
-          <span className="text-xs text-slate-500">Live</span>
+      {/* Rechts */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Live indicator */}
+        <div
+          aria-live="polite"
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: '#22C55E',
+              display: 'inline-block',
+              animation: 'livePulse 2s infinite',
+            }}
+          />
+          <span style={{ fontSize: 11, color: '#64748B' }}>Live</span>
+        </div>
+
+        {/* Notificatie knop */}
+        <button
+          onClick={() => { window.location.href = '/inbox' }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: '1px solid #E2E8F0',
+            background: '#fff',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative',
+          }}
+          aria-label={`Review-inbox, ${openReviewCount} open items`}
+        >
+          <Mail size={14} color="#64748B" />
+          {openReviewCount > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                background: '#EF4444',
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {openReviewCount > 9 ? '9+' : openReviewCount}
+            </span>
+          )}
+        </button>
+
+        {/* Avatar */}
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: '#3B82F6',
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+          title={userName}
+        >
+          {initials}
         </div>
       </div>
 
-      {/* Rechts: notificaties + gebruikersmenu */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="text-slate-500">
-          <Bell className="h-4 w-4" />
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button variant="ghost" className="flex items-center gap-2 px-2">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="text-blue-600 text-xs font-medium bg-blue-50">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="hidden sm:block text-sm text-slate-700">
-                {userName}
-              </span>
-              <ChevronDown className="h-3 w-3 text-slate-500" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => { window.location.href = '/settings' }}>
-              Instellingen
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-red-600 focus:text-red-600"
-              onClick={handleSignOut}
-            >
-              Uitloggen
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <style>{`
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+      `}</style>
     </header>
   )
 }

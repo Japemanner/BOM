@@ -7,11 +7,11 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar openReviewCount={3} />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar userName="Jaap Hoeve" tenantName="Demo Organisatie" />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F8FAFC' }}>
+      <Sidebar openReviewCount={8} />
+      <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
+        <Topbar userName="Jaap Hoeve" openReviewCount={8} />
+        <main style={{ flex: 1, overflowY: 'auto', padding: 20 }}>{children}</main>
       </div>
     </div>
   )
