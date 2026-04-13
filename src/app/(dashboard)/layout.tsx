@@ -1,5 +1,11 @@
+import { DM_Sans } from 'next/font/google'
 import { Sidebar } from '@/components/layout/sidebar'
-import { Topbar } from '@/components/layout/topbar'
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  display: 'swap',
+})
 
 export default function DashboardLayout({
   children,
@@ -7,11 +13,26 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F8FAFC' }}>
-      <Sidebar openReviewCount={8} />
-      <div style={{ display: 'flex', flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
-        <Topbar userName="Jaap Hoeve" openReviewCount={8} />
-        <main style={{ flex: 1, overflowY: 'auto', padding: 20 }}>{children}</main>
+    <div
+      className={dmSans.className}
+      style={{
+        display: 'flex',
+        height: '100vh',
+        overflow: 'hidden',
+        background: '#F7F8FA',
+      }}
+    >
+      <Sidebar activeAssistantCount={3} />
+      <div
+        style={{
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minWidth: 0,
+        }}
+      >
+        {children}
       </div>
     </div>
   )
