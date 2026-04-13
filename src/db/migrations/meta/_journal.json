@@ -8,6 +8,13 @@
       "when": 1776050948197,
       "tag": "0000_handy_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776081058399,
+      "tag": "0001_modern_sabra",
+      "breakpoints": true
     }
   ]
 }
