@@ -6,7 +6,8 @@ test.describe('Auth — Login pagina', () => {
   })
 
   test('login pagina rendert correct', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Inloggen' })).toBeVisible()
+    // CardTitle rendert als <div>, niet als heading — gebruik getByText
+    await expect(page.getByText('Inloggen').first()).toBeVisible()
     await expect(page.getByText('BackOffice AI Platform')).toBeVisible()
   })
 
@@ -50,10 +51,8 @@ test.describe('Auth — Register pagina', () => {
   })
 
   test('register pagina rendert correct', async ({ page }) => {
-    // Registreer-pagina heeft heading "Account aanmaken"
-    await expect(
-      page.getByRole('heading', { name: /account aanmaken/i })
-    ).toBeVisible()
+    // CardTitle rendert als <div>, niet als heading — gebruik getByText
+    await expect(page.getByText('Account aanmaken').first()).toBeVisible()
   })
 
   test('register formulier bevat naam, e-mail en wachtwoord', async ({ page }) => {

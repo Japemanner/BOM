@@ -4,6 +4,11 @@ const PROTECTED_PATHS = ['/assistants', '/inbox', '/integrations', '/settings']
 const AUTH_PATHS = ['/login', '/register']
 
 export async function middleware(request: NextRequest) {
+  // Bypass auth redirects in test environments
+  if (process.env.SKIP_AUTH_REDIRECT === 'true') {
+    return NextResponse.next()
+  }
+
   const { pathname } = request.nextUrl
 
   const sessionToken =

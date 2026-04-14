@@ -71,9 +71,13 @@ test.describe('Instellingen — tabs en assistentenbeheer', () => {
     // Standaard: assistent is actief
     await expect(page.getByText('Assistent is actief en bereikbaar')).toBeVisible()
 
-    // Zet offline
-    const offlineSection = page.locator('text=Assistent offline zetten').locator('..')
-    await offlineSection.locator('button').click()
+    // De SmallToggle voor offline staat is de laatste button[type="button"] in het modal
+    // (volgorde: chatten, bestanden uploaden, offline)
+    const offlineToggle = page
+      .locator('p', { hasText: 'Assistent offline zetten' })
+      .locator('xpath=../..')
+      .locator('button[type="button"]')
+    await offlineToggle.click()
 
     await expect(page.getByText('Assistent is niet bereikbaar voor gebruikers')).toBeVisible()
   })

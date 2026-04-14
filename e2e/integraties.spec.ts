@@ -29,37 +29,30 @@ test.describe('Integraties — Telegram en E-mail/SMTP', () => {
     // Klik op de header van de Telegram kaart om te expanderen
     await page.getByText('Telegram').first().click()
 
-    // Bot token veld verschijnt
-    await expect(
-      page.getByPlaceholder(/bot.*token/i).or(
-        page.getByLabel(/bot token/i)
-      )
-    ).toBeVisible()
+    // Bot Token veld is een password input
+    await expect(page.locator('input[type="password"]').first()).toBeVisible()
   })
 
   test('Telegram formulier bevat bot token en chat ID velden', async ({ page }) => {
     await page.getByText('Telegram').first().click()
 
-    await expect(page.getByPlaceholder(/bot.*token/i).or(page.getByLabel(/bot token/i))).toBeVisible()
-    await expect(page.getByPlaceholder(/chat.*id/i).or(page.getByLabel(/chat id/i))).toBeVisible()
+    // Bot Token (password input) en Chat ID (text input met bekende placeholder)
+    await expect(page.locator('input[type="password"]').first()).toBeVisible()
+    await expect(page.locator('input[placeholder="-1001234567890"]')).toBeVisible()
   })
 
   test('klikken op E-mail kaart expandeert SMTP formulier', async ({ page }) => {
     await page.getByText('E-mail').first().click()
 
-    // SMTP host veld verschijnt
-    await expect(
-      page.getByPlaceholder(/smtp.*host/i).or(
-        page.getByLabel(/host/i).first()
-      )
-    ).toBeVisible()
+    // SMTP host veld verschijnt met bekende placeholder
+    await expect(page.locator('input[placeholder="smtp.resend.com"]')).toBeVisible()
   })
 
   test('SMTP formulier bevat host, poort en credentials', async ({ page }) => {
     await page.getByText('E-mail').first().click()
 
-    await expect(page.getByLabel(/host/i).first()).toBeVisible()
-    await expect(page.getByLabel(/poort/i).or(page.getByLabel(/port/i))).toBeVisible()
+    await expect(page.locator('input[placeholder="smtp.resend.com"]')).toBeVisible()
+    await expect(page.locator('input[placeholder="587"]')).toBeVisible()
   })
 
   test('Verbinding testen knop is aanwezig in Telegram formulier', async ({ page }) => {

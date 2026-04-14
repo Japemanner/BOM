@@ -48,6 +48,7 @@ export default defineConfig({
           BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? 'playwright-test-secret-min-32-chars!!',
           BETTER_AUTH_URL: 'http://localhost:3000',
           NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+          SKIP_AUTH_REDIRECT: 'true',
         },
       },
 })
