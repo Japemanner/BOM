@@ -42,6 +42,12 @@ const ASSISTANT_SUBS = [
   { value: 'beide',     label: 'Beide' },
 ]
 
+const ASSISTANT_INTERACTIES = [
+  { value: 'web',        label: 'Web only' },
+  { value: 'integratie', label: 'Integratie' },
+  { value: 'beide',      label: 'Beide' },
+]
+
 const statusLabel: Record<AssistantStatus, string> = {
   active: 'Actief',
   paused: 'Gepauzeerd',
@@ -59,6 +65,7 @@ interface EditForm {
   description: string
   type: string
   sub: string
+  interactie: string
   webhook: string
   chatten: boolean
   bestandenUploaden: boolean
@@ -69,6 +76,7 @@ const emptyForm: EditForm = {
   description: '',
   type: 'redeneer',
   sub: 'beide',
+  interactie: 'web',
   webhook: '',
   chatten: false,
   bestandenUploaden: false,
@@ -205,6 +213,7 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
       description: a.description,
       type: a.type,
       sub: 'beide',
+      interactie: 'web',
       webhook: '',
       chatten: false,
       bestandenUploaden: false,
@@ -484,7 +493,7 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 />
               </FormField>
 
-              {/* Type + Sub naast elkaar */}
+              {/* Type + Sub + Interactie in grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <FormField label="Type">
                   <select
@@ -506,6 +515,18 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                   >
                     {ASSISTANT_SUBS.map((s) => (
                       <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField label="Interactie">
+                  <select
+                    value={form.interactie}
+                    onChange={(e) => setForm((f) => ({ ...f, interactie: e.target.value }))}
+                    style={{ ...fieldStyle, background: '#fff', cursor: 'pointer' }}
+                  >
+                    {ASSISTANT_INTERACTIES.map((i) => (
+                      <option key={i.value} value={i.value}>{i.label}</option>
                     ))}
                   </select>
                 </FormField>
