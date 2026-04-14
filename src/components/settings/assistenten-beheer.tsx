@@ -8,6 +8,23 @@ import {
 import { useAssistantsStore } from '@/store/assistants-store'
 import type { AssistantStatus } from '@/types'
 
+async function logEvent(
+  assistantId: string,
+  assistantName: string,
+  eventType: 'activated' | 'deactivated'
+) {
+  try {
+    const res = await fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assistantId, assistantName, eventType }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  } catch (error) {
+    console.error('[logEvent] kon event niet loggen:', { assistantId, assistantName, eventType, error })
+  }
+}
+
 const TEAL = '#1D9E75'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -356,6 +373,8 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
     // Optimistisch updaten in lokale state én store (voor dashboard)
     setAssistants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: newStatus } : x))
     setStatus(a.id, newStatus)
+    // Fire-and-forget: log event naar database
+    void logEvent(a.id, a.name, newStatus === 'active' ? 'activated' : 'deactivated')
     if (a.source === 'db') {
       setLoading(a.id)
       try {
@@ -426,6 +445,11 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
         }
         // Sla status op in store zodat dashboard direct reageert
         setStatus(editingId, newStatus)
+        // Log alleen als de status daadwerkelijk wijzigt
+        const currentStatus = assistants.find((x) => x.id === editingId)?.status
+        if (currentStatus !== newStatus) {
+          void logEvent(editingId, form.name, newStatus === 'active' ? 'activated' : 'deactivated')
+        }
         setAssistants((prev) => prev.map((x) =>
           x.id === editingId ? { ...x, name: form.name, description: form.description, type: form.type, status: newStatus } : x
         ))
