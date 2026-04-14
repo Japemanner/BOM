@@ -30,13 +30,16 @@ interface AdminAssistantsProps {
 }
 
 const ASSISTANT_TYPES = [
-  { value: 'factuur',    label: 'Factuurverwerker' },
-  { value: 'email',      label: 'E-mail classifier' },
-  { value: 'contract',   label: 'Contract checker' },
-  { value: 'onboarding', label: 'Onboarding' },
-  { value: 'rapport',    label: 'Rapportage' },
-  { value: 'ubl',        label: 'UBL / Export' },
-  { value: 'custom',     label: 'Overig' },
+  { value: 'redeneer', label: 'Redeneer' },
+  { value: 'react',    label: 'ReAct' },
+  { value: 'tekst',    label: 'Tekst' },
+  { value: 'audio',    label: 'Audio' },
+]
+
+const ASSISTANT_SUBS = [
+  { value: 'freelance', label: 'Freelance' },
+  { value: 'mkb',       label: 'MKB' },
+  { value: 'beide',     label: 'Beide' },
 ]
 
 const statusLabel: Record<AssistantStatus, string> = {
@@ -55,10 +58,95 @@ interface EditForm {
   name: string
   description: string
   type: string
-  tenantId: string
+  sub: string
+  webhook: string
+  chatten: boolean
+  bestandenUploaden: boolean
 }
 
-const emptyForm: EditForm = { name: '', description: '', type: 'custom', tenantId: '' }
+const emptyForm: EditForm = {
+  name: '',
+  description: '',
+  type: 'redeneer',
+  sub: 'beide',
+  webhook: '',
+  chatten: false,
+  bestandenUploaden: false,
+}
+
+// ── Hulpcomponenten modal ──────────────────────────────────────────────────
+
+const fieldStyle: React.CSSProperties = {
+  width: '100%',
+  height: 36,
+  padding: '0 10px',
+  borderRadius: 7,
+  border: '0.5px solid #E2E8F0',
+  fontSize: 13,
+  outline: 'none',
+  boxSizing: 'border-box',
+  fontFamily: 'inherit',
+  color: '#0F172A',
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function ModalToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 36, height: 20, borderRadius: 10,
+        border: 'none', padding: 0,
+        background: checked ? '#1D9E75' : '#E2E8F0',
+        position: 'relative', cursor: 'pointer',
+        transition: 'background 0.2s', flexShrink: 0,
+      }}
+    >
+      <span style={{
+        position: 'absolute', width: 16, height: 16,
+        borderRadius: '50%', background: '#fff',
+        top: 2, left: checked ? 18 : 2,
+        transition: 'left 0.15s',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+      }} />
+    </button>
+  )
+}
+
+function ModalToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: 0 }}>{label}</p>
+        <p style={{ fontSize: 11, color: '#94A3B8', margin: '1px 0 0' }}>{description}</p>
+      </div>
+      <ModalToggle checked={checked} onChange={onChange} />
+    </div>
+  )
+}
+
+// ── Hoofdcomponent ─────────────────────────────────────────────────────────
 
 export function AdminAssistants({ assistants: initial, tenants }: AdminAssistantsProps) {
   const [assistants, setAssistants] = useState<Assistant[]>(initial)
@@ -112,29 +200,43 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
 
   // Bewerken openen
   const openEdit = (a: Assistant) => {
-    setForm({ name: a.name, description: a.description, type: a.type, tenantId: a.tenantId })
+    setForm({
+      name: a.name,
+      description: a.description,
+      type: a.type,
+      sub: 'beide',
+      webhook: '',
+      chatten: false,
+      bestandenUploaden: false,
+    })
     setEditingId(a.id)
   }
 
   // Nieuw openen
   const openNew = () => {
-    setForm({ ...emptyForm, tenantId: tenants[0]?.id ?? '' })
+    setForm(emptyForm)
     setEditingId('new')
   }
 
   // Opslaan (nieuw of update)
   const handleSave = async () => {
-    if (!form.name.trim() || !form.tenantId) {
-      showToast('Naam en tenant zijn verplicht', false)
+    if (!form.name.trim()) {
+      showToast('Naam is verplicht', false)
       return
     }
     setLoading('save')
     try {
       if (editingId === 'new') {
+        const tenantId = tenants[0]?.id ?? '00000000-0000-0000-0000-000000000001'
         const res = await fetch('/api/assistants', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            name: form.name,
+            description: form.description,
+            type: form.type,
+            tenantId,
+          }),
         })
         if (!res.ok) throw new Error()
         const created = (await res.json()) as Assistant
@@ -350,80 +452,82 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
               {/* Naam */}
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
-                  Naam *
-                </label>
+              <FormField label="Naam *">
                 <input
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="Bijv. Factuurverwerker"
-                  style={{
-                    width: '100%', height: 36, padding: '0 10px', borderRadius: 7,
-                    border: '1px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                  }}
+                  style={fieldStyle}
                 />
-              </div>
+              </FormField>
 
               {/* Beschrijving */}
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
-                  Beschrijving
-                </label>
+              <FormField label="Beschrijving">
                 <input
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="Korte omschrijving van de taak"
-                  style={{
-                    width: '100%', height: 36, padding: '0 10px', borderRadius: 7,
-                    border: '1px solid #E2E8F0', fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                  }}
+                  style={fieldStyle}
                 />
-              </div>
+              </FormField>
 
-              {/* Type */}
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
-                  Type
-                </label>
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                  style={{
-                    width: '100%', height: 36, padding: '0 10px', borderRadius: 7,
-                    border: '1px solid #E2E8F0', fontSize: 13, outline: 'none',
-                    background: '#fff', boxSizing: 'border-box',
-                  }}
-                >
-                  {ASSISTANT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Webhook */}
+              <FormField label="Webhook (n8n)">
+                <input
+                  value={form.webhook}
+                  onChange={(e) => setForm((f) => ({ ...f, webhook: e.target.value }))}
+                  placeholder="https://n8n.jouwdomein.nl/webhook/..."
+                  type="url"
+                  style={fieldStyle}
+                />
+              </FormField>
 
-              {/* Tenant (alleen bij nieuw) */}
-              {editingId === 'new' && (
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
-                    Tenant *
-                  </label>
+              {/* Type + Sub naast elkaar */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <FormField label="Type">
                   <select
-                    value={form.tenantId}
-                    onChange={(e) => setForm((f) => ({ ...f, tenantId: e.target.value }))}
-                    style={{
-                      width: '100%', height: 36, padding: '0 10px', borderRadius: 7,
-                      border: '1px solid #E2E8F0', fontSize: 13, outline: 'none',
-                      background: '#fff', boxSizing: 'border-box',
-                    }}
+                    value={form.type}
+                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                    style={{ ...fieldStyle, background: '#fff', cursor: 'pointer' }}
                   >
-                    <option value="">Selecteer tenant</option>
-                    {tenants.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                    {ASSISTANT_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
-                </div>
-              )}
+                </FormField>
+
+                <FormField label="Sub">
+                  <select
+                    value={form.sub}
+                    onChange={(e) => setForm((f) => ({ ...f, sub: e.target.value }))}
+                    style={{ ...fieldStyle, background: '#fff', cursor: 'pointer' }}
+                  >
+                    {ASSISTANT_SUBS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+
+              {/* Divider */}
+              <div style={{ borderTop: '0.5px solid #F1F5F9' }} />
+
+              {/* Toggles */}
+              <ModalToggleRow
+                label="Chatten"
+                description="Gebruiker kan berichten sturen"
+                checked={form.chatten}
+                onChange={(v) => setForm((f) => ({ ...f, chatten: v }))}
+              />
+              <ModalToggleRow
+                label="Bestanden uploaden"
+                description="Gebruiker kan bijlagen meesturen"
+                checked={form.bestandenUploaden}
+                onChange={(v) => setForm((f) => ({ ...f, bestandenUploaden: v }))}
+              />
+
             </div>
 
             {/* Knoppen */}
