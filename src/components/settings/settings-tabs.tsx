@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 import { AdminAssistants } from './admin-assistants'
+import { AssistentenBeheer } from './assistenten-beheer'
 import type { AssistantStatus } from '@/types'
+
+const TEAL = '#1D9E75'
 
 interface Assistant {
   id: string
@@ -28,33 +31,52 @@ interface SettingsTabsProps {
   tenants: Tenant[]
 }
 
-const tabs = [
-  { id: 'algemeen', label: 'Algemeen' },
-  { id: 'admin',    label: 'Admin' },
+const TABS = [
+  { id: 'algemeen',    label: 'Algemeen' },
+  { id: 'assistenten', label: 'Assistenten beheer' },
+  { id: 'admin',       label: 'Admin' },
 ]
 
 export function SettingsTabs({ assistants, tenants }: SettingsTabsProps) {
-  const [active, setActive] = useState('admin')
+  const [active, setActive] = useState('assistenten')
+
+  // Zet DB-assistenten om naar het formaat dat AssistentenBeheer verwacht
+  const dbAssistants = assistants.map((a) => ({
+    id: a.id,
+    name: a.name,
+    description: a.description,
+    type: a.type,
+    status: a.status,
+    runsToday: 0,
+    source: 'db' as const,
+    tenantId: a.tenantId,
+  }))
 
   return (
     <div>
       {/* Tab nav */}
       <div style={{
-        display: 'flex', gap: 0,
-        borderBottom: '1px solid #E2E8F0',
+        display: 'flex',
+        borderBottom: '0.5px solid #EAECEF',
         marginBottom: 24,
       }}>
-        {tabs.map((tab) => (
+        {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActive(tab.id)}
             style={{
-              height: 38, padding: '0 18px',
-              fontSize: 13, fontWeight: active === tab.id ? 600 : 400,
-              color: active === tab.id ? '#1E40AF' : '#64748B',
-              background: 'none', border: 'none', cursor: 'pointer',
-              borderBottom: active === tab.id ? '2px solid #3B82F6' : '2px solid transparent',
-              marginBottom: -1, transition: 'all 0.15s',
+              height: 38,
+              padding: '0 16px',
+              fontSize: 13,
+              fontWeight: active === tab.id ? 500 : 400,
+              color: active === tab.id ? TEAL : '#6B7280',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              borderBottom: active === tab.id ? `2px solid ${TEAL}` : '2px solid transparent',
+              marginBottom: -1,
+              transition: 'color 0.15s, border-color 0.15s',
+              fontFamily: 'inherit',
             }}
           >
             {tab.label}
@@ -66,14 +88,18 @@ export function SettingsTabs({ assistants, tenants }: SettingsTabsProps) {
       {active === 'algemeen' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Section title="Account" description="Persoonlijke instellingen en profiel">
-            <PlaceholderRow label="Naam" value="— nog niet gekoppeld aan sessie —" />
+            <PlaceholderRow label="Naam"   value="— nog niet gekoppeld aan sessie —" />
             <PlaceholderRow label="E-mail" value="— nog niet gekoppeld aan sessie —" />
           </Section>
           <Section title="Platform" description="Versie en omgevingsinformatie">
-            <PlaceholderRow label="Versie" value="0.1.0-beta" />
+            <PlaceholderRow label="Versie"    value="0.1.0-beta" />
             <PlaceholderRow label="Omgeving" value={process.env.NODE_ENV ?? 'unknown'} />
           </Section>
         </div>
+      )}
+
+      {active === 'assistenten' && (
+        <AssistentenBeheer dbAssistants={dbAssistants} />
       )}
 
       {active === 'admin' && (
@@ -94,11 +120,13 @@ function Section({
 }) {
   return (
     <div style={{
-      background: '#fff', border: '0.5px solid #E2E8F0',
-      borderRadius: 12, padding: 20,
+      background: '#fff',
+      border: '0.5px solid #EAECEF',
+      borderRadius: 12,
+      padding: 20,
     }}>
-      <p style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', margin: '0 0 2px' }}>{title}</p>
-      <p style={{ fontSize: 12, color: '#94A3B8', margin: '0 0 16px' }}>{description}</p>
+      <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: '0 0 2px' }}>{title}</p>
+      <p style={{ fontSize: 12, color: '#9CA3AF', margin: '0 0 16px' }}>{description}</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
     </div>
   )
@@ -108,7 +136,7 @@ function PlaceholderRow({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <span style={{ fontSize: 12, fontWeight: 500, color: '#374151', width: 100, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 12, color: '#94A3B8' }}>{value}</span>
+      <span style={{ fontSize: 12, color: '#9CA3AF' }}>{value}</span>
     </div>
   )
 }
