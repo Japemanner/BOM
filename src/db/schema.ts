@@ -119,6 +119,14 @@ export const integrations = pgTable('integrations', {
   lastCheckedAt: timestamp('last_checked_at'),
 })
 
+export const assistantEvents = pgTable('assistant_events', {
+  id: text('id').primaryKey(),
+  assistantId: text('assistant_id').notNull(),
+  assistantName: text('assistant_name').notNull(),
+  eventType: text('event_type').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
 // Better Auth vereiste tabellen
 export const accounts = pgTable('accounts', {
   id: text('id').primaryKey(),
