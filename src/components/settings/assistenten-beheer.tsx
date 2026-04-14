@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FileText, Mail, FileCheck, UserCheck, AlignLeft, Send, Bot,
   Play, Pause, Settings, Trash2, Loader2, Plus, X, Save,
@@ -349,6 +349,12 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
         status: statusOverrides[a.id] ?? a.status,
       }))
   )
+
+  // Zustand persist hydrateert asynchroon: deletedIds is leeg bij de eerste render
+  // en wordt pas gevuld vanuit localStorage. Sync de lijst zodra dit gebeurt.
+  useEffect(() => {
+    setAssistants((prev) => prev.filter((a) => !deletedIds.includes(a.id)))
+  }, [deletedIds])
 
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [form, setForm] = useState<EditForm>(EMPTY_FORM)
