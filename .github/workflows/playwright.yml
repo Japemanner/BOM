@@ -1,0 +1,125 @@
+name: Playwright E2E Tests
+
+on:
+  # Draait na elke succesvolle Coolify deploy (via repository_dispatch)
+  repository_dispatch:
+    types: [coolify-deploy-success]
+
+  # Draait ook bij elke push naar main (regressietest vóór deploy)
+  push:
+    branches: [main]
+
+  pull_request:
+    branches: [main]
+
+  # Handmatig starten
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Test target: "local" (dev server) of "production" (Coolify URL)'
+        required: false
+        default: 'local'
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Job 1: Regressietests tegen lokale dev server (met PostgreSQL service)
+  # -----------------------------------------------------------------------
+  e2e-local:
+    name: E2E — Dev server
+    runs-on: ubuntu-latest
+    # Sla over als we alleen een production smoke test willen draaien
+    if: ${{ github.event.inputs.target != 'production' }}
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Installeer dependencies
+        run: npm ci
+
+      - name: Installeer Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Drizzle migraties uitvoeren
+        env:
+          DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/testdb
+        run: npm run db:migrate
+
+      - name: Playwright tests uitvoeren
+        env:
+          DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/testdb
+          BETTER_AUTH_SECRET: playwright-test-secret-min-32-chars!!
+          BETTER_AUTH_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+        run: npx playwright test
+
+      - name: Upload HTML rapport
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-local
+          path: playwright-report/
+          retention-days: 14
+
+  # -----------------------------------------------------------------------
+  # Job 2: Smoke tests tegen productie (Coolify)
+  # -----------------------------------------------------------------------
+  e2e-production:
+    name: E2E — Productie smoke test
+    runs-on: ubuntu-latest
+    # Draait alleen bij: manual trigger met target=production OF repository_dispatch na deploy
+    if: >
+      github.event_name == 'repository_dispatch' ||
+      github.event.inputs.target == 'production'
+    # Wacht niet op job 1 — draait onafhankelijk
+    needs: []
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Installeer dependencies
+        run: npm ci
+
+      - name: Installeer Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke tests uitvoeren tegen productie
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ secrets.COOLIFY_DOMAIN }}
+        run: npx playwright test e2e/auth.spec.ts e2e/navigation.spec.ts
+
+      - name: Upload HTML rapport
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-production
+          path: playwright-report/
+          retention-days: 14

@@ -5,6 +5,7 @@ import {
   FileText, Mail, FileCheck, UserCheck, AlignLeft, Send, Bot,
   Play, Pause, Settings, Trash2, Loader2, Plus, X, Save,
 } from 'lucide-react'
+import { useAssistantsStore } from '@/store/assistants-store'
 import type { AssistantStatus } from '@/types'
 
 const TEAL = '#1D9E75'
@@ -32,6 +33,7 @@ interface EditForm {
   webhook: string
   chatten: boolean
   bestandenUploaden: boolean
+  offline: boolean
 }
 
 // ── Gedeelde mock-data (zelfde als "Mijn assistenten" dashboard) ───────────
@@ -117,7 +119,7 @@ const STATUS_LABEL: Record<AssistantStatus, string> = {
 const EMPTY_FORM: EditForm = {
   name: '', description: '', type: 'redeneer',
   sub: 'Beide', interactie: 'Web only',
-  webhook: '', chatten: false, bestandenUploaden: false,
+  webhook: '', chatten: false, bestandenUploaden: false, offline: false,
 }
 
 // ── Hulpcomponenten ───────────────────────────────────────────────────────
@@ -259,6 +261,30 @@ function EditModal({
               </div>
             ))}
           </div>
+
+          {/* Offline zetten */}
+          <div style={{
+            borderTop: '0.5px solid #FEE2E2', paddingTop: 12,
+            background: form.offline ? '#FFF5F5' : 'transparent',
+            borderRadius: form.offline ? 8 : 0,
+            padding: form.offline ? '10px 12px' : '12px 0 0',
+            transition: 'background 0.2s',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 500, color: form.offline ? '#DC2626' : '#0F172A', margin: 0 }}>
+                  Assistent offline zetten
+                </p>
+                <p style={{ fontSize: 11, color: '#9CA3AF', margin: '1px 0 0' }}>
+                  {form.offline ? 'Assistent is niet bereikbaar voor gebruikers' : 'Assistent is actief en bereikbaar'}
+                </p>
+              </div>
+              <SmallToggle
+                checked={form.offline}
+                onChange={(v) => onFormChange({ ...form, offline: v })}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -295,11 +321,15 @@ interface AssistentenBeheerProps {
 }
 
 export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
-  // Combineer demo + db assistenten
-  const [assistants, setAssistants] = useState<ManagedAssistant[]>([
-    ...DEMO_ASSISTANTS,
-    ...dbAssistants,
-  ])
+  const { statusOverrides, setStatus } = useAssistantsStore()
+
+  // Combineer demo + db assistenten, pas store-overrides toe
+  const [assistants, setAssistants] = useState<ManagedAssistant[]>(() =>
+    [...DEMO_ASSISTANTS, ...dbAssistants].map((a) => ({
+      ...a,
+      status: statusOverrides[a.id] ?? a.status,
+    }))
+  )
 
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [form, setForm] = useState<EditForm>(EMPTY_FORM)
@@ -312,7 +342,7 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
   }
 
   const openEdit = (a: ManagedAssistant) => {
-    setForm({ ...EMPTY_FORM, name: a.name, description: a.description, type: a.type })
+    setForm({ ...EMPTY_FORM, name: a.name, description: a.description, type: a.type, offline: a.status !== 'active' })
     setEditingId(a.id)
   }
 
@@ -323,8 +353,9 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
 
   const handleToggle = async (a: ManagedAssistant) => {
     const newStatus: AssistantStatus = a.status === 'active' ? 'paused' : 'active'
-    // Optimistisch updaten
+    // Optimistisch updaten in lokale state én store (voor dashboard)
     setAssistants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: newStatus } : x))
+    setStatus(a.id, newStatus)
     if (a.source === 'db') {
       setLoading(a.id)
       try {
@@ -337,6 +368,7 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
       } catch {
         // Terugdraaien
         setAssistants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: a.status } : x))
+        setStatus(a.id, a.status)
         showToast('Wijziging mislukt', false)
       } finally {
         setLoading(null)
@@ -383,16 +415,19 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
         showToast(`${created.name} aangemaakt`)
       } else if (editingId) {
         const a = assistants.find((x) => x.id === editingId)
+        const newStatus: AssistantStatus = form.offline ? 'paused' : 'active'
         if (a?.source === 'db') {
           const res = await fetch(`/api/assistants/${editingId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: form.name, description: form.description, type: form.type }),
+            body: JSON.stringify({ name: form.name, description: form.description, type: form.type, status: newStatus }),
           })
           if (!res.ok) throw new Error()
         }
+        // Sla status op in store zodat dashboard direct reageert
+        setStatus(editingId, newStatus)
         setAssistants((prev) => prev.map((x) =>
-          x.id === editingId ? { ...x, name: form.name, description: form.description, type: form.type } : x
+          x.id === editingId ? { ...x, name: form.name, description: form.description, type: form.type, status: newStatus } : x
         ))
         showToast(`${form.name} opgeslagen`)
       }

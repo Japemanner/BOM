@@ -3,11 +3,17 @@ import { assistants, tenants } from '@/db/schema'
 import { SettingsTabs } from '@/components/settings/settings-tabs'
 
 async function getData() {
-  const [allAssistants, allTenants] = await Promise.all([
-    db.select().from(assistants).orderBy(assistants.createdAt),
-    db.select().from(tenants).orderBy(tenants.name),
-  ])
-  return { allAssistants, allTenants }
+  try {
+    const [allAssistants, allTenants] = await Promise.all([
+      db.select().from(assistants).orderBy(assistants.createdAt),
+      db.select().from(tenants).orderBy(tenants.name),
+    ])
+    return { allAssistants, allTenants }
+  } catch {
+    // DB niet beschikbaar (bijv. CI zonder database) — lege arrays teruggeven
+    // zodat demo-assistenten in AssistentenBeheer nog wel zichtbaar zijn
+    return { allAssistants: [], allTenants: [] }
+  }
 }
 
 export default async function SettingsPage() {

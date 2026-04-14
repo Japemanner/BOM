@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { AssistantCard } from './assistant-card'
 import { useOptimisticToggle } from '@/hooks/use-optimistic-toggle'
+import { useAssistantsStore } from '@/store/assistants-store'
 import type { AssistantStatus } from '@/types'
 import type { MetricsData } from './metrics-strip'
 
@@ -501,8 +502,19 @@ export function AssistantDashboard({
   const [isSaving, setIsSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
+  const { statusOverrides } = useAssistantsStore()
+
+  // Pas store-overrides toe op de lokale assistent-lijst
+  const assistantsWithOverrides = useMemo(
+    () => localAssistants.map((a) => ({
+      ...a,
+      status: (statusOverrides[a.id] ?? a.status) as AssistantStatus,
+    })),
+    [localAssistants, statusOverrides]
+  )
+
   const { states, toggle, errorMessage, clearError } = useOptimisticToggle(
-    localAssistants.map((a) => ({ id: a.id, status: a.status })),
+    assistantsWithOverrides.map((a) => ({ id: a.id, status: a.status })),
     patchAssistantStatus
   )
 
@@ -597,24 +609,29 @@ export function AssistantDashboard({
     }
   }, [selectedId, configForm, showToast])
 
-  // Filtered + sorted assistants
+  // Filtered + sorted assistants — paused (offline) worden niet getoond
   const displayed = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
+    const withStatus = assistantsWithOverrides.map((a) => ({
+      ...a,
+      status: (states.get(a.id) ?? a.status) as AssistantStatus,
+    }))
+
+    const visible = withStatus.filter((a) => a.status !== 'paused')
+
     const filtered = q
-      ? localAssistants.filter(
+      ? visible.filter(
           (a) =>
             a.name.toLowerCase().includes(q) ||
             a.description.toLowerCase().includes(q)
         )
-      : localAssistants
+      : visible
 
     const ORDER: Record<AssistantStatus, number> = { error: 0, active: 1, paused: 2 }
     return [...filtered].sort(
-      (a, b) =>
-        (ORDER[states.get(a.id) ?? a.status] ?? 2) -
-        (ORDER[states.get(b.id) ?? b.status] ?? 2)
+      (a, b) => (ORDER[a.status] ?? 2) - (ORDER[b.status] ?? 2)
     )
-  }, [localAssistants, searchQuery, states])
+  }, [assistantsWithOverrides, searchQuery, states])
 
   const activeCount = [...states.values()].filter((s) => s === 'active').length
   const errorAssistants = localAssistants.filter(
@@ -994,6 +1011,7 @@ export function AssistantDashboard({
               {TEMPLATE_CHIPS.map((chip) => (
                 <button
                   key={chip.label}
+                  data-testid="template-chip"
                   onClick={() => handleNew(chip.label)}
                   style={{
                     height: 32,
