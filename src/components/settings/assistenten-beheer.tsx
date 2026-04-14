@@ -338,14 +338,16 @@ interface AssistentenBeheerProps {
 }
 
 export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
-  const { statusOverrides, setStatus } = useAssistantsStore()
+  const { statusOverrides, deletedIds, setStatus, markDeleted } = useAssistantsStore()
 
-  // Combineer demo + db assistenten, pas store-overrides toe
+  // Combineer demo + db assistenten, pas store-overrides toe en filter verwijderde
   const [assistants, setAssistants] = useState<ManagedAssistant[]>(() =>
-    [...DEMO_ASSISTANTS, ...dbAssistants].map((a) => ({
-      ...a,
-      status: statusOverrides[a.id] ?? a.status,
-    }))
+    [...DEMO_ASSISTANTS, ...dbAssistants]
+      .filter((a) => !deletedIds.includes(a.id))
+      .map((a) => ({
+        ...a,
+        status: statusOverrides[a.id] ?? a.status,
+      }))
   )
 
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
@@ -399,6 +401,8 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
   const handleDelete = async (a: ManagedAssistant) => {
     if (!confirm(`Weet je zeker dat je "${a.name}" wilt verwijderen?`)) return
     setAssistants((prev) => prev.filter((x) => x.id !== a.id))
+    // Sla verwijdering op in store zodat hij na refresh niet terugkomt
+    markDeleted(a.id)
     if (a.source === 'db') {
       setLoading(a.id + '_del')
       try {
