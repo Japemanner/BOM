@@ -15,7 +15,7 @@ export default function DashboardLayout({
         fontFamily: "'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}
     >
-      <Sidebar activeAssistantCount={3} />
+      <Sidebar />
       <div
         style={{
           display: 'flex',

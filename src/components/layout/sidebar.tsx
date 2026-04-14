@@ -33,13 +33,11 @@ const MANAGE_ITEMS: NavItem[] = [
 ]
 
 interface SidebarProps {
-  activeAssistantCount?: number
   userName?: string
   userPlan?: string
 }
 
 export function Sidebar({
-  activeAssistantCount = 3,
   userName = 'Jaap Hoeve',
   userPlan = 'Pro plan',
 }: SidebarProps) {
@@ -151,10 +149,7 @@ export function Sidebar({
           {WORKSPACE_ITEMS.map((item) => {
             const active = isActive(item.href)
             const Icon = item.icon
-            const badge =
-              item.href === '/' && activeAssistantCount > 0
-                ? activeAssistantCount
-                : undefined
+            const badge = undefined
 
             return (
               <li key={item.href}>
