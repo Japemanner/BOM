@@ -29,6 +29,7 @@
       "when": 1776169583555,
       "tag": "0003_youthful_scarecrow",
       "breakpoints": true
-    }
+    },
+    {"idx": 4, "version": "7", "when": 1776238800000, "tag": "0004_schema_split_rbac", "breakpoints": true}
   ]
 }
