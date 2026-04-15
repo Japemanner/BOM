@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantEvents } from '@/db/schema'
+import { assistantEvents } from '@/db/schema/app'
 import { gte } from 'drizzle-orm'
 
 // Bouw een array van datumstrings voor de afgelopen N dagen

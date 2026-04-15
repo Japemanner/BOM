@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants } from '@/db/schema'
+import { assistants } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { AssistantStatus } from '@/types'

@@ -1,5 +1,6 @@
 import { db } from '@/db'
-import { assistants, tenants } from '@/db/schema'
+import { assistants } from '@/db/schema/app'
+import { tenants } from '@/db/schema/iam'
 import { SettingsTabs } from '@/components/settings/settings-tabs'
 
 async function getData() {

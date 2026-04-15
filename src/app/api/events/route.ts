@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantEvents } from '@/db/schema'
+import { assistantEvents } from '@/db/schema/app'
 import { z } from 'zod'
 
 const createEventSchema = z.object({

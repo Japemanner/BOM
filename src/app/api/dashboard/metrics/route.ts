@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, assistantRuns, reviewItems } from '@/db/schema'
+import { assistants, assistantRuns, reviewItems } from '@/db/schema/app'
 import { eq, and, gte, count } from 'drizzle-orm'
 import { AssistantStatus, ReviewStatus } from '@/types'
 import type { DashboardMetrics } from '@/types'

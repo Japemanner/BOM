@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { reviewItems } from '@/db/schema'
+import { reviewItems } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
 import { updateReviewStatusSchema } from '@/lib/validations'
 
