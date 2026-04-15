@@ -73,3 +73,24 @@ export interface DashboardMetrics {
   totalAssistants: number
   openReviewItems: number
 }
+
+// RBAC-permissie types
+export const PermissionResource = {
+  ASSISTANTS: 'assistants',
+  INTEGRATIONS: 'integrations',
+  TENANT: 'tenant',
+} as const
+export type PermissionResource = (typeof PermissionResource)[keyof typeof PermissionResource]
+
+export const PermissionAction = {
+  CREATE: 'create',
+  READ: 'read',
+  UPDATE: 'update',
+  DELETE: 'delete',
+  TOGGLE_STATUS: 'toggle_status',
+  UPDATE_PLAN: 'update_plan',
+  INVITE_USER: 'invite_user',
+  REMOVE_USER: 'remove_user',
+  UPDATE_MEMBER_ROLE: 'update_member_role',
+} as const
+export type PermissionAction = (typeof PermissionAction)[keyof typeof PermissionAction]
