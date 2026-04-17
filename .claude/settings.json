@@ -1,0 +1,12 @@
+{
+  "model": "claude-sonnet-4-6",
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(npx tsx *)",
+      "Bash(git *)",
+      "Bash(npx drizzle-kit *)"
+    ]
+  }
+}
