@@ -18,3 +18,5 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO rbac.role_permissions (role_id, permission_id)
 VALUES ('admin', 'webhooks.manage')
 ON CONFLICT DO NOTHING;
+
+CREATE INDEX ON app.webhook_tokens (tenant_id);

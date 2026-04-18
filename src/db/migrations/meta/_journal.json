@@ -31,6 +31,6 @@
       "breakpoints": true
     },
     {"idx": 4, "version": "7", "when": 1776238800000, "tag": "0004_schema_split_rbac", "breakpoints": true},
-    {"idx": 5, "version": "7", "when": 1745008800000, "tag": "0005_webhook_tokens", "breakpoints": true}
+    {"idx": 5, "version": "7", "when": 1776536700000, "tag": "0005_webhook_tokens", "breakpoints": true}
   ]
 }
