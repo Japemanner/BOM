@@ -1,3 +1,4 @@
+// src/lib/crypto.ts
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 
 function getKey(): Buffer {
@@ -20,8 +21,10 @@ export function encrypt(plaintext: string): string {
 export function decrypt(encrypted: string): string {
   const key = getKey()
   const parts = encrypted.split(':')
-  if (parts.length !== 3) throw new Error('Ongeldig versleuteld formaat')
-  const [ivHex, tagHex, ciphertextHex] = parts as [string, string, string]
+  const ivHex = parts[0]
+  const tagHex = parts[1]
+  const ciphertextHex = parts[2]
+  if (!ivHex || !tagHex || !ciphertextHex) throw new Error('Ongeldig versleuteld formaat')
   const iv = Buffer.from(ivHex, 'hex')
   const tag = Buffer.from(tagHex, 'hex')
   const ciphertext = Buffer.from(ciphertextHex, 'hex')
