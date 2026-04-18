@@ -24,6 +24,7 @@ const PERMISSIONS = [
   { id: 'tenant.invite_user',        resource: 'tenant',       action: 'invite_user',        description: 'Gebruiker uitnodigen' },
   { id: 'tenant.remove_user',        resource: 'tenant',       action: 'remove_user',        description: 'Gebruiker verwijderen' },
   { id: 'tenant.update_member_role', resource: 'tenant',       action: 'update_member_role', description: 'Rol van lid wijzigen' },
+  { id: 'webhooks.manage',           resource: 'webhooks',     action: 'manage',             description: 'Webhook tokens beheren' },
 ]
 
 const ROLE_PERMISSIONS: { roleId: string; permissionId: string }[] = [

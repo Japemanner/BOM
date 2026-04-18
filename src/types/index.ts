@@ -79,6 +79,7 @@ export const PermissionResource = {
   ASSISTANTS: 'assistants',
   INTEGRATIONS: 'integrations',
   TENANT: 'tenant',
+  WEBHOOKS: 'webhooks',
 } as const
 export type PermissionResource = (typeof PermissionResource)[keyof typeof PermissionResource]
 
@@ -92,5 +93,6 @@ export const PermissionAction = {
   INVITE_USER: 'invite_user',
   REMOVE_USER: 'remove_user',
   UPDATE_MEMBER_ROLE: 'update_member_role',
+  MANAGE: 'manage',
 } as const
 export type PermissionAction = (typeof PermissionAction)[keyof typeof PermissionAction]
