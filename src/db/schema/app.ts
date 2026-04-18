@@ -17,6 +17,8 @@ export const assistants = appSchema.table('assistants', {
   config: jsonb('config').notNull().default({}),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  webhookUrl: text('webhook_url'),
+  webhookTokenEncrypted: text('webhook_token_encrypted'),
 })
 
 export const assistantRuns = appSchema.table('assistant_runs', {
@@ -67,4 +69,15 @@ export const integrations = appSchema.table('integrations', {
   status: text('status').notNull().default('setup'),  // 'active' | 'error' | 'setup'
   config: jsonb('config').notNull().default({}),
   lastCheckedAt: timestamp('last_checked_at'),
+})
+
+export const webhookTokens = appSchema.table('webhook_tokens', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at'),
 })
