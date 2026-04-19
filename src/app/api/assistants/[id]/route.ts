@@ -4,6 +4,7 @@ import { assistants } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { AssistantStatus } from '@/types'
+import { encrypt } from '@/lib/crypto'
 
 // Admin endpoint — geen tenant-isolatie (admin ziet alle assistenten)
 const patchSchema = z.object({
@@ -15,6 +16,8 @@ const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).optional(),
   type: z.string().min(1).optional(),
+  webhookUrl: z.string().url().nullable().optional(),
+  webhookToken: z.string().min(1).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Geen velden om te updaten' })
 
 export async function GET(
@@ -51,9 +54,18 @@ export async function PATCH(
       )
     }
 
+    const { webhookToken, webhookUrl, ...rest } = parsed.data
+
+    const updateData: Record<string, unknown> = {
+      ...rest,
+      updatedAt: new Date(),
+    }
+    if (webhookUrl !== undefined) updateData.webhookUrl = webhookUrl
+    if (webhookToken) updateData.webhookTokenEncrypted = encrypt(webhookToken)
+
     const [updated] = await db
       .update(assistants)
-      .set({ ...parsed.data, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(assistants.id, id))
       .returning()
 
