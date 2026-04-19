@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AdminAssistants } from './admin-assistants'
 import { AssistentenBeheer } from './assistenten-beheer'
+import { WebhookTokens } from './webhook-tokens'
 import type { AssistantStatus } from '@/types'
 
 const TEAL = '#1D9E75'
@@ -26,9 +27,17 @@ interface Tenant {
   createdAt: string
 }
 
+interface WebhookToken {
+  id: string
+  name: string
+  createdAt: string
+  lastUsedAt: string | null
+}
+
 interface SettingsTabsProps {
   assistants: Assistant[]
   tenants: Tenant[]
+  webhookTokens: WebhookToken[]
 }
 
 const TABS = [
@@ -37,7 +46,7 @@ const TABS = [
   { id: 'admin',       label: 'Admin' },
 ]
 
-export function SettingsTabs({ assistants, tenants }: SettingsTabsProps) {
+export function SettingsTabs({ assistants, tenants, webhookTokens }: SettingsTabsProps) {
   const [active, setActive] = useState('assistenten')
 
   // Zet DB-assistenten om naar het formaat dat AssistentenBeheer verwacht
@@ -103,7 +112,10 @@ export function SettingsTabs({ assistants, tenants }: SettingsTabsProps) {
       )}
 
       {active === 'admin' && (
-        <AdminAssistants assistants={assistants} tenants={tenants} />
+        <div>
+          <AdminAssistants assistants={assistants} tenants={tenants} />
+          <WebhookTokens initial={webhookTokens} />
+        </div>
       )}
     </div>
   )
