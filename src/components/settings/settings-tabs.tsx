@@ -17,6 +17,8 @@ interface Assistant {
   tenantId: string
   createdAt: string
   updatedAt: string
+  webhookUrl: string | null
+  webhookTokenEncrypted: string | null
 }
 
 interface Tenant {

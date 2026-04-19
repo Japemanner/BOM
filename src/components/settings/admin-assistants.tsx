@@ -15,6 +15,8 @@ interface Assistant {
   tenantId: string
   createdAt: string
   updatedAt?: string
+  webhookUrl: string | null
+  webhookTokenEncrypted: string | null
 }
 
 interface Tenant {
@@ -66,7 +68,9 @@ interface EditForm {
   type: string
   sub: string
   interactie: string
-  webhook: string
+  webhookUrl: string
+  webhookToken: string
+  webhookTokenEditing: boolean
   chatten: boolean
   bestandenUploaden: boolean
 }
@@ -77,7 +81,9 @@ const emptyForm: EditForm = {
   type: 'redeneer',
   sub: 'beide',
   interactie: 'web',
-  webhook: '',
+  webhookUrl: '',
+  webhookToken: '',
+  webhookTokenEditing: false,
   chatten: false,
   bestandenUploaden: false,
 }
@@ -214,7 +220,9 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
       type: a.type,
       sub: 'beide',
       interactie: 'web',
-      webhook: '',
+      webhookUrl: a.webhookUrl ?? '',
+      webhookToken: '',
+      webhookTokenEditing: false,
       chatten: false,
       bestandenUploaden: false,
     })
@@ -252,10 +260,20 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
         setAssistants((prev) => [created, ...prev])
         showToast(`${created.name} aangemaakt`)
       } else {
+        const patchBody: Record<string, unknown> = {
+          name: form.name,
+          description: form.description,
+          type: form.type,
+        }
+        if (form.webhookUrl !== undefined) patchBody.webhookUrl = form.webhookUrl || null
+        if (form.webhookTokenEditing && form.webhookToken) {
+          patchBody.webhookToken = form.webhookToken
+        }
+
         const res = await fetch(`/api/assistants/${editingId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: form.name, description: form.description, type: form.type }),
+          body: JSON.stringify(patchBody),
         })
         if (!res.ok) throw new Error()
         const updated = (await res.json()) as Assistant
@@ -482,15 +500,61 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 />
               </FormField>
 
-              {/* Webhook */}
-              <FormField label="Webhook (n8n)">
+              {/* Webhook URL */}
+              <FormField label="Webhook URL (N8N)">
                 <input
-                  value={form.webhook}
-                  onChange={(e) => setForm((f) => ({ ...f, webhook: e.target.value }))}
+                  value={form.webhookUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, webhookUrl: e.target.value }))}
                   placeholder="https://n8n.jouwdomein.nl/webhook/..."
                   type="url"
                   style={fieldStyle}
                 />
+              </FormField>
+
+              {/* Webhook token */}
+              <FormField label="Webhook token">
+                {form.webhookTokenEditing ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      autoFocus
+                      value={form.webhookToken}
+                      onChange={(e) => setForm((f) => ({ ...f, webhookToken: e.target.value }))}
+                      placeholder="Nieuw token invoeren"
+                      type="text"
+                      style={{ ...fieldStyle, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, webhookTokenEditing: false, webhookToken: '' }))}
+                      style={{
+                        height: 36, padding: '0 10px', borderRadius: 7,
+                        background: '#F1F5F9', border: '1px solid #CBD5E1',
+                        fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', color: '#374151',
+                      }}
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      value="••••••••••••••••"
+                      disabled
+                      style={{ ...fieldStyle, flex: 1, color: '#9CA3AF' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, webhookTokenEditing: true }))}
+                      style={{
+                        height: 36, padding: '0 10px', borderRadius: 7,
+                        background: '#F1F5F9', border: '1px solid #CBD5E1',
+                        fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', color: '#374151',
+                      }}
+                    >
+                      Bewerken
+                    </button>
+                  </div>
+                )}
               </FormField>
 
               {/* Type + Sub + Interactie in grid */}
