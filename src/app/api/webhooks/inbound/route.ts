@@ -1,16 +1,17 @@
 // src/app/api/webhooks/inbound/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { webhookTokens, reviewItems } from '@/db/schema/app'
-import { eq } from 'drizzle-orm'
+import { webhookTokens, reviewItems, assistants } from '@/db/schema/app'
+import { and, eq } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { z } from 'zod'
+import { ReviewPriority } from '@/types'
 
 const bodySchema = z.object({
   assistantId: z.string().uuid(),
   title: z.string().min(1).max(255),
   description: z.string().max(1000).optional().default(''),
-  priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+  priority: z.enum(Object.values(ReviewPriority) as [string, ...string[]]).default(ReviewPriority.MEDIUM),
 })
 
 export async function POST(request: NextRequest) {
@@ -48,6 +49,17 @@ export async function POST(request: NextRequest) {
   }
 
   const { assistantId, title, description, priority } = parsed.data
+
+  // Valideer dat assistantId bij dezelfde tenant hoort als het token
+  const [assistant] = await db
+    .select({ id: assistants.id })
+    .from(assistants)
+    .where(and(eq(assistants.id, assistantId), eq(assistants.tenantId, tokenRecord.tenantId)))
+    .limit(1)
+
+  if (!assistant) {
+    return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
+  }
 
   try {
     const items = await db

@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { randomBytes, createHash } from 'crypto'
 import { z } from 'zod'
 
+// TODO: vervang door echte sessie-tenant en voeg canDo(userId, tenantId, 'webhooks', 'manage') toe zodra auth op API-routes is aangesloten
 const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
 
 export async function GET() {

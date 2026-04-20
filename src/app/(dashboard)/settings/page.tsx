@@ -28,7 +28,7 @@ async function getData() {
 export default async function SettingsPage() {
   const { allAssistants, allTenants, allWebhookTokens } = await getData()
 
-  const assistantsData = allAssistants.map((a) => ({
+  const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => ({
     ...a,
     status: a.status as AssistantStatus,
     createdAt: a.createdAt.toISOString(),
