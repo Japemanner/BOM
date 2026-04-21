@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { AdminAssistants } from './admin-assistants'
 import { AssistentenBeheer } from './assistenten-beheer'
-import { WebhookTokens } from './webhook-tokens'
-import type { AssistantStatus } from '@/types'
+import type { AssistantStatus, WebhookToken } from '@/types'
 
 const TEAL = '#1D9E75'
 
@@ -29,17 +28,10 @@ interface Tenant {
   createdAt: string
 }
 
-interface WebhookToken {
-  id: string
-  name: string
-  createdAt: string
-  lastUsedAt: string | null
-}
-
 interface SettingsTabsProps {
   assistants: Assistant[]
   tenants: Tenant[]
-  webhookTokens: WebhookToken[]
+  inboundTokens: WebhookToken[]
 }
 
 const TABS = [
@@ -48,10 +40,9 @@ const TABS = [
   { id: 'admin',       label: 'Admin' },
 ]
 
-export function SettingsTabs({ assistants, tenants, webhookTokens }: SettingsTabsProps) {
+export function SettingsTabs({ assistants, tenants, inboundTokens }: SettingsTabsProps) {
   const [active, setActive] = useState('assistenten')
 
-  // Zet DB-assistenten om naar het formaat dat AssistentenBeheer verwacht
   const dbAssistants = assistants.map((a) => ({
     id: a.id,
     name: a.name,
@@ -65,7 +56,6 @@ export function SettingsTabs({ assistants, tenants, webhookTokens }: SettingsTab
 
   return (
     <div>
-      {/* Tab nav */}
       <div style={{
         display: 'flex',
         borderBottom: '0.5px solid #EAECEF',
@@ -95,7 +85,6 @@ export function SettingsTabs({ assistants, tenants, webhookTokens }: SettingsTab
         ))}
       </div>
 
-      {/* Tab inhoud */}
       {active === 'algemeen' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Section title="Account" description="Persoonlijke instellingen en profiel">
@@ -114,10 +103,7 @@ export function SettingsTabs({ assistants, tenants, webhookTokens }: SettingsTab
       )}
 
       {active === 'admin' && (
-        <div>
-          <AdminAssistants assistants={assistants} tenants={tenants} />
-          <WebhookTokens initial={webhookTokens} />
-        </div>
+        <AdminAssistants assistants={assistants} tenants={tenants} inboundTokens={inboundTokens} />
       )}
     </div>
   )

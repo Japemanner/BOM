@@ -1,32 +1,38 @@
+import { redirect } from 'next/navigation'
 import { db } from '@/db'
 import { eq } from 'drizzle-orm'
 import { assistants, webhookTokens } from '@/db/schema/app'
 import { tenants } from '@/db/schema/iam'
 import { SettingsTabs } from '@/components/settings/settings-tabs'
 import type { AssistantStatus } from '@/types'
+import { getSessionContextOrNull } from '@/lib/session'
 
-const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
-
-async function getData() {
+async function getData(tenantId: string) {
   try {
-    const [allAssistants, allTenants, allWebhookTokens] = await Promise.all([
-      db.select().from(assistants).orderBy(assistants.createdAt),
+    const [allAssistants, allTenants, allInboundTokens] = await Promise.all([
+      db.select().from(assistants)
+        .where(eq(assistants.tenantId, tenantId))
+        .orderBy(assistants.createdAt),
       db.select().from(tenants).orderBy(tenants.name),
       db.select({
         id: webhookTokens.id,
         name: webhookTokens.name,
+        assistantId: webhookTokens.assistantId,
         createdAt: webhookTokens.createdAt,
         lastUsedAt: webhookTokens.lastUsedAt,
-      }).from(webhookTokens).where(eq(webhookTokens.tenantId, DEMO_TENANT_ID)),
+      }).from(webhookTokens).where(eq(webhookTokens.tenantId, tenantId)),
     ])
-    return { allAssistants, allTenants, allWebhookTokens }
+    return { allAssistants, allTenants, allInboundTokens }
   } catch {
-    return { allAssistants: [], allTenants: [], allWebhookTokens: [] }
+    return { allAssistants: [], allTenants: [], allInboundTokens: [] }
   }
 }
 
 export default async function SettingsPage() {
-  const { allAssistants, allTenants, allWebhookTokens } = await getData()
+  const ctx = await getSessionContextOrNull()
+  if (!ctx) redirect('/login')
+
+  const { allAssistants, allTenants, allInboundTokens } = await getData(ctx.tenantId)
 
   const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => ({
     ...a,
@@ -40,8 +46,9 @@ export default async function SettingsPage() {
     createdAt: t.createdAt.toISOString(),
   }))
 
-  const webhookTokensData = allWebhookTokens.map((t) => ({
+  const inboundTokensData = allInboundTokens.map((t) => ({
     ...t,
+    assistantId: t.assistantId ?? null,
     createdAt: t.createdAt.toISOString(),
     lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
   }))
@@ -66,7 +73,7 @@ export default async function SettingsPage() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
         <div style={{ maxWidth: 840 }}>
-          <SettingsTabs assistants={assistantsData} tenants={tenantsData} webhookTokens={webhookTokensData} />
+          <SettingsTabs assistants={assistantsData} tenants={tenantsData} inboundTokens={inboundTokensData} />
         </div>
       </div>
     </div>

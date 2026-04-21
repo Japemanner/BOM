@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import {
   Plus, Trash2, Settings, Play, Pause, X, Save, Loader2,
+  Copy, Check,
 } from 'lucide-react'
 import type { AssistantStatus } from '@/types'
 
@@ -19,6 +20,14 @@ interface Assistant {
   webhookTokenEncrypted?: string | null
 }
 
+interface InboundToken {
+  id: string
+  name: string
+  assistantId: string | null
+  createdAt: string
+  lastUsedAt: string | null
+}
+
 interface Tenant {
   id: string
   name: string
@@ -29,6 +38,7 @@ interface Tenant {
 interface AdminAssistantsProps {
   assistants: Assistant[]
   tenants: Tenant[]
+  inboundTokens: InboundToken[]
 }
 
 const ASSISTANT_TYPES = [
@@ -87,8 +97,6 @@ const emptyForm: EditForm = {
   chatten: false,
   bestandenUploaden: false,
 }
-
-// ── Hulpcomponenten modal ──────────────────────────────────────────────────
 
 const fieldStyle: React.CSSProperties = {
   width: '100%',
@@ -160,21 +168,78 @@ function ModalToggleRow({
   )
 }
 
-// ── Hoofdcomponent ─────────────────────────────────────────────────────────
+const TEAL = '#1D9E75'
 
-export function AdminAssistants({ assistants: initial, tenants }: AdminAssistantsProps) {
+export function AdminAssistants({ assistants: initial, tenants, inboundTokens: initialTokens }: AdminAssistantsProps) {
   const [assistants, setAssistants] = useState<Assistant[]>(initial)
+  const [inboundTokens, setInboundTokens] = useState<InboundToken[]>(initialTokens)
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [form, setForm] = useState<EditForm>(emptyForm)
   const [loading, setLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+
+  const [newTokenName, setNewTokenName] = useState('')
+  const [showTokenInput, setShowTokenInput] = useState(false)
+  const [revealedToken, setRevealedToken] = useState<string | null>(null)
+  const [tokenCopied, setTokenCopied] = useState(false)
+  const [confirmDeleteToken, setConfirmDeleteToken] = useState<string | null>(null)
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
   }
 
-  // Toggle active/paused
+  const tokensForAssistant = (assistantId: string) =>
+    inboundTokens.filter((t) => t.assistantId === assistantId)
+
+  const handleCreateToken = async (assistantId: string) => {
+    if (!newTokenName.trim()) return
+    setLoading('token')
+    try {
+      const res = await fetch('/api/webhooks/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTokenName.trim(), assistantId }),
+      })
+      if (!res.ok) throw new Error()
+      const data = (await res.json()) as InboundToken & { token: string }
+      setInboundTokens((prev) => [...prev, {
+        id: data.id, name: data.name,
+        assistantId: data.assistantId ?? assistantId,
+        createdAt: new Date(data.createdAt).toISOString(),
+        lastUsedAt: null,
+      }])
+      setRevealedToken(data.token)
+      setNewTokenName('')
+      setShowTokenInput(false)
+    } catch {
+      showToast('Token aanmaken mislukt', false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleDeleteToken = async (tokenId: string) => {
+    setLoading('token')
+    try {
+      const res = await fetch(`/api/webhooks/tokens/${tokenId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setInboundTokens((prev) => prev.filter((t) => t.id !== tokenId))
+      setConfirmDeleteToken(null)
+    } catch {
+      showToast('Token verwijderen mislukt', false)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleCopy = async () => {
+    if (!revealedToken) return
+    await navigator.clipboard.writeText(revealedToken)
+    setTokenCopied(true)
+    setTimeout(() => setTokenCopied(false), 2000)
+  }
+
   const handleToggle = async (a: Assistant) => {
     const newStatus: AssistantStatus = a.status === 'active' ? 'paused' : 'active'
     setLoading(a.id)
@@ -196,7 +261,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
     }
   }
 
-  // Verwijderen
   const handleDelete = async (a: Assistant) => {
     if (!confirm(`Weet je zeker dat je "${a.name}" wilt verwijderen?`)) return
     setLoading(a.id + '_del')
@@ -212,7 +276,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
     }
   }
 
-  // Bewerken openen
   const openEdit = (a: Assistant) => {
     setForm({
       name: a.name,
@@ -226,16 +289,19 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
       chatten: false,
       bestandenUploaden: false,
     })
+    setRevealedToken(null)
+    setShowTokenInput(false)
+    setConfirmDeleteToken(null)
     setEditingId(a.id)
   }
 
-  // Nieuw openen
   const openNew = () => {
     setForm(emptyForm)
+    setRevealedToken(null)
+    setShowTokenInput(false)
     setEditingId('new')
   }
 
-  // Opslaan (nieuw of update)
   const handleSave = async () => {
     if (!form.name.trim()) {
       showToast('Naam is verplicht', false)
@@ -255,7 +321,15 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
             tenantId,
           }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await res.json().catch(() => null)
+          if (res.status === 401 || res.status === 403) {
+            showToast('Geen toestemming', false)
+          } else {
+            showToast(err?.error ?? 'Aanmaken mislukt', false)
+          }
+          return
+        }
         const created = (await res.json()) as Assistant
         setAssistants((prev) => [created, ...prev])
         showToast(`${created.name} aangemaakt`)
@@ -275,7 +349,15 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patchBody),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await res.json().catch(() => null)
+          if (res.status === 401 || res.status === 403) {
+            showToast('Geen toestemming', false)
+          } else {
+            showToast(err?.error ?? 'Opslaan mislukt', false)
+          }
+          return
+        }
         const updated = (await res.json()) as Assistant
         setAssistants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
         showToast(`${updated.name} opgeslagen`)
@@ -288,16 +370,17 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
     }
   }
 
-  // Groepeer per tenant
   const byTenant = tenants.map((t) => ({
     tenant: t,
     items: assistants.filter((a) => a.tenantId === t.id),
   }))
 
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-      {/* Toast */}
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 100,
@@ -308,7 +391,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
         </div>
       )}
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', margin: 0 }}>
@@ -332,10 +414,8 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
         </button>
       </div>
 
-      {/* Per tenant */}
       {byTenant.map(({ tenant, items }) => (
         <div key={tenant.id}>
-          {/* Tenant header */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             marginBottom: 8, paddingBottom: 6,
@@ -367,26 +447,22 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                     borderRadius: 10, padding: '10px 14px',
                   }}
                 >
-                  {/* Status pip */}
                   <span style={{
                     width: 7, height: 7, borderRadius: '50%',
                     background: statusColor[a.status], flexShrink: 0,
                   }} />
 
-                  {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.name}
                     </p>
                     <p style={{ fontSize: 11, color: '#94A3B8', margin: '1px 0 0' }}>
                       {a.type} · {statusLabel[a.status]}
-                      {a.description && ` · ${a.description}`}
+                      {a.webhookUrl && ' · Webhook actief'}
                     </p>
                   </div>
 
-                  {/* Acties */}
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    {/* Toggle */}
                     <button
                       onClick={() => handleToggle(a)}
                       disabled={loading === a.id || a.status === 'error'}
@@ -407,7 +483,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                       }
                     </button>
 
-                    {/* Instellingen */}
                     <button
                       onClick={() => openEdit(a)}
                       title="Instellingen"
@@ -421,7 +496,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                       <Settings size={12} color="#64748B" />
                     </button>
 
-                    {/* Verwijderen */}
                     <button
                       onClick={() => handleDelete(a)}
                       disabled={loading === a.id + '_del'}
@@ -453,8 +527,7 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
         </p>
       )}
 
-      {/* Edit / Nieuw modal */}
-      {editingId !== null && (
+      {editingId !== null && editingId !== 'new' && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}
           style={{
@@ -464,11 +537,12 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
         >
           <div style={{
             background: '#fff', borderRadius: 12, padding: 24, width: 440, maxWidth: '90vw',
+            maxHeight: '85vh', overflowY: 'auto',
             boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', margin: 0 }}>
-                {editingId === 'new' ? 'Nieuwe assistent' : 'Assistent bewerken'}
+                Assistent bewerken
               </h3>
               <button
                 onClick={() => setEditingId(null)}
@@ -480,7 +554,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-              {/* Naam */}
               <FormField label="Naam *">
                 <input
                   value={form.name}
@@ -490,7 +563,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 />
               </FormField>
 
-              {/* Beschrijving */}
               <FormField label="Beschrijving">
                 <input
                   value={form.description}
@@ -500,7 +572,14 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 />
               </FormField>
 
-              {/* Webhook URL */}
+              <div style={{ borderTop: '1px solid #F1F5F9', margin: '4px 0' }} />
+              <p style={{ fontSize: 12, fontWeight: 600, color: '#0F172A', margin: 0 }}>
+                Outbound webhook (N8N)
+              </p>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '-6px 0 0' }}>
+                BOM stuurt resultaten naar deze URL met bearer token
+              </p>
+
               <FormField label="Webhook URL (N8N)">
                 <input
                   value={form.webhookUrl}
@@ -511,7 +590,6 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 />
               </FormField>
 
-              {/* Webhook token */}
               <FormField label="Webhook token">
                 {form.webhookTokenEditing ? (
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -538,7 +616,7 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 ) : (
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <input
-                      value="••••••••••••••••"
+                      value={form.webhookUrl ? '••••••••••••••••' : '(niet ingesteld)'}
                       disabled
                       style={{ ...fieldStyle, flex: 1, color: '#9CA3AF' }}
                     />
@@ -557,7 +635,148 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 )}
               </FormField>
 
-              {/* Type + Sub + Interactie in grid */}
+              <div style={{ borderTop: '1px solid #F1F5F9', margin: '4px 0' }} />
+              <p style={{ fontSize: 12, fontWeight: 600, color: '#0F172A', margin: 0 }}>
+                Inbound webhook
+              </p>
+              <p style={{ fontSize: 11, color: '#94A3B8', margin: '-6px 0 0' }}>
+                N8N stuurt berichten naar BOM met bearer token
+              </p>
+
+              {tokensForAssistant(editingId).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {tokensForAssistant(editingId).map((t) => (
+                    <div
+                      key={t.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        background: '#F8FAFC', border: '0.5px solid #E2E8F0',
+                        borderRadius: 6, padding: '6px 10px',
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: '#0F172A', flex: 1 }}>
+                        {t.name}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#94A3B8' }}>
+                        {formatDate(t.createdAt)}
+                        {t.lastUsedAt && ` · laatst ${formatDate(t.lastUsedAt)}`}
+                      </span>
+                      {confirmDeleteToken === t.id ? (
+                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                          <span style={{ fontSize: 10, color: '#EF4444' }}>Zeker?</span>
+                          <button
+                            onClick={() => handleDeleteToken(t.id)}
+                            disabled={loading === 'token'}
+                            style={{ fontSize: 10, color: '#fff', background: '#EF4444', border: 'none', borderRadius: 3, padding: '1px 6px', cursor: 'pointer' }}
+                          >Ja</button>
+                          <button
+                            onClick={() => setConfirmDeleteToken(null)}
+                            style={{ fontSize: 10, color: '#6B7280', background: '#F1F5F9', border: 'none', borderRadius: 3, padding: '1px 6px', cursor: 'pointer' }}
+                          >Nee</button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteToken(t.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#CBD5E1', padding: 2 }}
+                          title="Token intrekken"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {revealedToken && (
+                <div style={{
+                  background: '#F0FDF4', border: '1px solid #86EFAC',
+                  borderRadius: 8, padding: 12,
+                }}>
+                  <p style={{ fontSize: 11, fontWeight: 500, color: '#166534', marginBottom: 6 }}>
+                    Token aangemaakt —kopieer het nu. Dit token wordt niet meer getoond.
+                  </p>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <code style={{
+                      flex: 1, fontSize: 10, background: '#fff',
+                      border: '1px solid #BBF7D0', borderRadius: 4,
+                      padding: '4px 8px', wordBreak: 'break-all', color: '#0F172A',
+                    }}>
+                      {revealedToken}
+                    </code>
+                    <button
+                      onClick={handleCopy}
+                      style={{
+                        height: 28, padding: '0 10px', borderRadius: 5,
+                        background: tokenCopied ? '#22C55E' : TEAL, color: '#fff', border: 'none',
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                        display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                      }}
+                    >
+                      {tokenCopied ? <><Check size={11} /> Gekopieerd</> : <><Copy size={11} /> Kopieer</>}
+                    </button>
+                    <button
+                      onClick={() => setRevealedToken(null)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!showTokenInput && !revealedToken && (
+                <button
+                  onClick={() => { setShowTokenInput(true); setNewTokenName('') }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    height: 32, padding: '0 12px', borderRadius: 6,
+                    background: TEAL, color: '#fff', border: 'none',
+                    fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    fontFamily: 'inherit', alignSelf: 'flex-start',
+                  }}
+                >
+                  <Plus size={13} /> Nieuw inbound token
+                </button>
+              )}
+
+              {showTokenInput && !revealedToken && (
+                <div style={{
+                  background: '#F8FAFC', border: '0.5px solid #E2E8F0',
+                  borderRadius: 8, padding: 12,
+                  display: 'flex', gap: 8, alignItems: 'center',
+                }}>
+                  <input
+                    autoFocus
+                    value={newTokenName}
+                    onChange={(e) => setNewTokenName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateToken(editingId as string)}
+                    placeholder="Token naam, bijv. 'N8N productie'"
+                    style={{ flex: 1, height: 32, padding: '0 10px', border: '1px solid #CBD5E1', borderRadius: 6, fontSize: 12, fontFamily: 'inherit' }}
+                  />
+                  <button
+                    onClick={() => handleCreateToken(editingId as string)}
+                    disabled={loading === 'token' || !newTokenName.trim()}
+                    style={{
+                      height: 32, padding: '0 14px', borderRadius: 6,
+                      background: TEAL, color: '#fff', border: 'none',
+                      fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                      opacity: loading === 'token' || !newTokenName.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    Aanmaken
+                  </button>
+                  <button
+                    onClick={() => setShowTokenInput(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px solid #F1F5F9', margin: '4px 0' }} />
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <FormField label="Type">
                   <select
@@ -596,10 +815,8 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
                 </FormField>
               </div>
 
-              {/* Divider */}
               <div style={{ borderTop: '0.5px solid #F1F5F9' }} />
 
-              {/* Toggles */}
               <ModalToggleRow
                 label="Chatten"
                 description="Gebruiker kan berichten sturen"
@@ -615,7 +832,108 @@ export function AdminAssistants({ assistants: initial, tenants }: AdminAssistant
 
             </div>
 
-            {/* Knoppen */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setEditingId(null)}
+                style={{
+                  height: 34, padding: '0 14px', borderRadius: 7,
+                  border: '1px solid #E2E8F0', background: '#fff',
+                  fontSize: 13, cursor: 'pointer', color: '#64748B',
+                }}
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={loading === 'save'}
+                style={{
+                  height: 34, padding: '0 16px', borderRadius: 7,
+                  background: '#3B82F6', color: '#fff', border: 'none',
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  opacity: loading === 'save' ? 0.7 : 1,
+                }}
+              >
+                {loading === 'save'
+                  ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Opslaan...</>
+                  : <><Save size={12} /> Opslaan</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingId === 'new' && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+          }}
+        >
+          <div style={{
+            background: '#fff', borderRadius: 12, padding: 24, width: 440, maxWidth: '90vw',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', margin: 0 }}>
+                Nieuwe assistent
+              </h3>
+              <button
+                onClick={() => setEditingId(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={16} color="#94A3B8" />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <FormField label="Naam *">
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Bijv. Factuurverwerker"
+                  style={fieldStyle}
+                />
+              </FormField>
+
+              <FormField label="Beschrijving">
+                <input
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Korte omschrijving van de taak"
+                  style={fieldStyle}
+                />
+              </FormField>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <FormField label="Type">
+                  <select
+                    value={form.type}
+                    onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                    style={{ ...fieldStyle, background: '#fff', cursor: 'pointer' }}
+                  >
+                    {ASSISTANT_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField label="Sub">
+                  <select
+                    value={form.sub}
+                    onChange={(e) => setForm((f) => ({ ...f, sub: e.target.value }))}
+                    style={{ ...fieldStyle, background: '#fff', cursor: 'pointer' }}
+                  >
+                    {ASSISTANT_SUBS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setEditingId(null)}

@@ -5,8 +5,9 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { AssistantStatus } from '@/types'
 import { encrypt } from '@/lib/crypto'
+import { canDo } from '@/lib/permissions'
+import { getSessionContext } from '@/lib/session'
 
-// Admin endpoint — geen tenant-isolatie (admin ziet alle assistenten)
 const patchSchema = z.object({
   status: z.enum([
     AssistantStatus.ACTIVE,
@@ -24,15 +25,24 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
+  if (!await canDo(userId, tenantId, 'assistants', 'read')) {
+    return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+  }
+
   const { id } = await params
   try {
     const assistant = await db.query.assistants.findFirst({
-      where: eq(assistants.id, id),
+      where: and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)),
     })
     if (!assistant) {
       return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
     }
-    return NextResponse.json(assistant)
+    const { webhookTokenEncrypted: _wte, ...safe } = assistant
+    return NextResponse.json(safe)
   } catch (error) {
     console.error('[assistants/[id] GET]', error)
     return NextResponse.json({ error: 'Interne fout' }, { status: 500 })
@@ -43,6 +53,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
   const { id } = await params
   try {
     const body: unknown = await request.json()
@@ -56,6 +70,14 @@ export async function PATCH(
 
     const { webhookToken, webhookUrl, ...rest } = parsed.data
 
+    const hasWebhookChange = webhookUrl !== undefined || webhookToken
+    const requiredPermission = hasWebhookChange ? 'webhooks' : 'assistants'
+    const requiredAction = hasWebhookChange ? 'manage' : 'update'
+
+    if (!await canDo(userId, tenantId, requiredPermission, requiredAction)) {
+      return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+    }
+
     const updateData: Record<string, unknown> = {
       ...rest,
       updatedAt: new Date(),
@@ -66,14 +88,15 @@ export async function PATCH(
     const [updated] = await db
       .update(assistants)
       .set(updateData)
-      .where(eq(assistants.id, id))
+      .where(and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)))
       .returning()
 
     if (!updated) {
       return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
     }
 
-    return NextResponse.json(updated)
+    const { webhookTokenEncrypted: _wte, ...safe } = updated
+    return NextResponse.json(safe)
   } catch (error) {
     console.error('[assistants/[id] PATCH]', error)
     return NextResponse.json({ error: 'Interne fout' }, { status: 500 })
@@ -84,11 +107,19 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
+  if (!await canDo(userId, tenantId, 'assistants', 'delete')) {
+    return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+  }
+
   const { id } = await params
   try {
     const [deleted] = await db
       .delete(assistants)
-      .where(eq(assistants.id, id))
+      .where(and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)))
       .returning({ id: assistants.id })
 
     if (!deleted) {

@@ -76,6 +76,8 @@ export const webhookTokens = appSchema.table('webhook_tokens', {
   tenantId: uuid('tenant_id')
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' }),
+  assistantId: uuid('assistant_id')
+    .references(() => assistants.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   tokenHash: text('token_hash').notNull().unique(),
   createdAt: timestamp('created_at').notNull().defaultNow(),

@@ -1,14 +1,19 @@
-// src/app/api/webhooks/inbound/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { webhookTokens, reviewItems, assistants } from '@/db/schema/app'
-import { and, eq } from 'drizzle-orm'
+import { webhookTokens, reviewItems } from '@/db/schema/app'
+import { eq } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { z } from 'zod'
 import { ReviewPriority } from '@/types'
 
-const bodySchema = z.object({
+const bodyWithAssistantSchema = z.object({
   assistantId: z.string().uuid(),
+  title: z.string().min(1).max(255),
+  description: z.string().max(1000).optional().default(''),
+  priority: z.enum(Object.values(ReviewPriority) as [string, ...string[]]).default(ReviewPriority.MEDIUM),
+})
+
+const bodyWithoutAssistantSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(1000).optional().default(''),
   priority: z.enum(Object.values(ReviewPriority) as [string, ...string[]]).default(ReviewPriority.MEDIUM),
@@ -22,10 +27,14 @@ export async function POST(request: NextRequest) {
   const plaintext = auth.slice(7)
   const tokenHash = createHash('sha256').update(plaintext).digest('hex')
 
-  let tokenRecord: { id: string; tenantId: string } | undefined
+  let tokenRecord: { id: string; tenantId: string; assistantId: string | null } | undefined
   try {
     const [found] = await db
-      .select({ id: webhookTokens.id, tenantId: webhookTokens.tenantId })
+      .select({
+        id: webhookTokens.id,
+        tenantId: webhookTokens.tenantId,
+        assistantId: webhookTokens.assistantId,
+      })
       .from(webhookTokens)
       .where(eq(webhookTokens.tokenHash, tokenHash))
       .limit(1)
@@ -40,25 +49,31 @@ export async function POST(request: NextRequest) {
   }
 
   const body: unknown = await request.json().catch(() => null)
-  const parsed = bodySchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Ongeldige invoer', details: parsed.error.issues },
-      { status: 400 }
-    )
-  }
 
-  const { assistantId, title, description, priority } = parsed.data
+  let assistantId: string
+  let title: string
+  let description: string
+  let priority: string
 
-  // Valideer dat assistantId bij dezelfde tenant hoort als het token
-  const [assistant] = await db
-    .select({ id: assistants.id })
-    .from(assistants)
-    .where(and(eq(assistants.id, assistantId), eq(assistants.tenantId, tokenRecord.tenantId)))
-    .limit(1)
-
-  if (!assistant) {
-    return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
+  if (tokenRecord.assistantId) {
+    const parsed = bodyWithoutAssistantSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Ongeldige invoer', details: parsed.error.issues },
+        { status: 400 }
+      )
+    }
+    assistantId = tokenRecord.assistantId
+    ;({ title, description, priority } = parsed.data)
+  } else {
+    const parsed = bodyWithAssistantSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Ongeldige invoer', details: parsed.error.issues },
+        { status: 400 }
+      )
+    }
+    ;({ assistantId, title, description, priority } = parsed.data)
   }
 
   try {

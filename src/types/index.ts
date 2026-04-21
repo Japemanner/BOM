@@ -60,6 +60,14 @@ export const RunStatus = {
 } as const
 export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus]
 
+export interface WebhookToken {
+  id: string
+  name: string
+  assistantId: string | null
+  createdAt: string
+  lastUsedAt: string | null
+}
+
 // API response types
 export interface ApiError {
   error: string

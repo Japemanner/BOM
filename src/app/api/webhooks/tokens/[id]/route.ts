@@ -2,19 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { webhookTokens } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
-
-// TODO: vervang door echte sessie-tenant en voeg canDo(userId, tenantId, 'webhooks', 'manage') toe zodra auth op API-routes is aangesloten
-const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
+import { canDo } from '@/lib/permissions'
+import { getSessionContext } from '@/lib/session'
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
+  if (!await canDo(userId, tenantId, 'webhooks', 'manage')) {
+    return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+  }
+
   const { id } = await params
   try {
     const [deleted] = await db
       .delete(webhookTokens)
-      .where(and(eq(webhookTokens.id, id), eq(webhookTokens.tenantId, DEMO_TENANT_ID)))
+      .where(and(eq(webhookTokens.id, id), eq(webhookTokens.tenantId, tenantId)))
       .returning({ id: webhookTokens.id })
 
     if (!deleted) {
