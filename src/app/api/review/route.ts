@@ -6,7 +6,7 @@ import { ReviewStatus, ReviewPriority } from '@/types'
 
 const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
 
-const priorityOrder: Record<ReviewPriority, number> = {
+const priorityOrder: Record<string, number> = {
   [ReviewPriority.CRITICAL]: 0,
   [ReviewPriority.HIGH]: 1,
   [ReviewPriority.MEDIUM]: 2,
