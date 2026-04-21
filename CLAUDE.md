@@ -1,4 +1,5 @@
 # BOM — BackOffice AI Platform
+This project follows the rules defined in .claude/rules/. Always reference these files before suggesting architectural changes
 
 ## Projectoverzicht
 
@@ -27,7 +28,7 @@ app.*    — Domein: assistants, assistant_runs, assistant_events, review_items,
 
 ## RBAC
 
-Twee rollen: `admin` (15 permissies) en `member` (3 permissies: read op assistants/integrations/tenant).
+Twee rollen: `admin` (16 permissies, inclusief `webhooks.manage`) en `member` (3 permissies: read op assistants/integrations/tenant).
 Permissiecheck via `canDo(userId, tenantId, resource, action)` in `src/lib/permissions.ts`.
 
 ## Bestandsstructuur
@@ -37,23 +38,35 @@ src/
   app/
     (auth)/          — login, register pagina's
     (dashboard)/     — beschermde app-pagina's
-    api/             — REST endpoints (assistants, events, review, dashboard/metrics)
+    api/
+      assistants/    — CRUD assistenten (incl. webhook URL/token update)
+      assistant-runs/ — run aanmaken + outbound webhook trigger
+      events/        — assistant events
+      review/        — review items (+ prioriteit-sortering)
+      dashboard/     — metrics
+      webhooks/
+        inbound/     — POST inbound van N8N (bearer token auth)
+        tokens/      — GET + POST webhook tokens
+        tokens/[id]/ — DELETE webhook token
   components/        — UI-componenten (dashboard, settings, integrations, ui)
+    settings/
+      webhook-tokens.tsx — token beheer UI (aanmaken, kopiëren, intrekken)
   db/
     schema/
       auth.ts        — auth.* tabellen
       iam.ts         — iam.* tabellen
       rbac.ts        — rbac.* tabellen
-      app.ts         — app.* tabellen
+      app.ts         — app.* tabellen (incl. webhookTokens, assistants.webhookUrl/webhookTokenEncrypted)
       index.ts       — barrel export
-    migrations/      — SQL-migratiebestanden (0000–0004)
+    migrations/      — SQL-migratiebestanden (0000–0005)
     seed-rbac.ts     — idempotente RBAC seed
     index.ts         — Drizzle client
   lib/
     auth.ts          — Better Auth configuratie
     permissions.ts   — canDo() helper
+    crypto.ts        — AES-256-GCM encrypt() / decrypt() voor webhook tokens
   types/
-    index.ts         — gedeelde TypeScript types (UserRole, PermissionResource, etc.)
+    index.ts         — gedeelde TypeScript types (UserRole, PermissionResource, incl. webhooks)
 ```
 
 ## Architectuur
@@ -64,7 +77,7 @@ Zie `.claude/rules/architecture_rules.md` voor de leidende architectuurprincipes
 
 - Code in Engels, comments/uitleg in Nederlands
 - Geen onnodige dependencies
-- `.env.local` voor secrets, nooit hardcoded
+- `.env.local` voor secrets, nooit hardcoded — `ENCRYPTION_KEY` (64 hex chars) vereist voor AES-256 webhook token encryptie
 - GDPR/AVG by default — geen Amerikaanse providers zonder expliciete goedkeuring
 - Schrijfoperaties in API routes beschermen met `canDo()` voor elke nieuwe route
 
