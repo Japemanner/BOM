@@ -3,8 +3,8 @@ import { db } from '@/db'
 import { reviewItems } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
 import { ReviewStatus, ReviewPriority } from '@/types'
-
-const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
+import { canDo } from '@/lib/permissions'
+import { getSessionContext } from '@/lib/session'
 
 const priorityOrder: Record<string, number> = {
   [ReviewPriority.CRITICAL]: 0,
@@ -14,10 +14,18 @@ const priorityOrder: Record<string, number> = {
 }
 
 export async function GET() {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
+  if (!await canDo(userId, tenantId, 'assistants', 'read')) {
+    return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+  }
+
   try {
     const items = await db.query.reviewItems.findMany({
       where: and(
-        eq(reviewItems.tenantId, DEMO_TENANT_ID),
+        eq(reviewItems.tenantId, tenantId),
         eq(reviewItems.status, ReviewStatus.OPEN)
       ),
       orderBy: (r, { asc }) => [asc(r.createdAt)],

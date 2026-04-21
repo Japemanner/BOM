@@ -1,4 +1,5 @@
 import { Sidebar } from '@/components/layout/sidebar'
+import { EnsureTenant } from '@/components/layout/ensure-tenant'
 
 export default function DashboardLayout({
   children,
@@ -25,7 +26,7 @@ export default function DashboardLayout({
           minWidth: 0,
         }}
       >
-        {children}
+        <EnsureTenant>{children}</EnsureTenant>
       </div>
     </div>
   )

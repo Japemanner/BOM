@@ -4,11 +4,18 @@ import { assistants, assistantRuns, reviewItems } from '@/db/schema/app'
 import { eq, and, gte, count } from 'drizzle-orm'
 import { AssistantStatus, ReviewStatus } from '@/types'
 import type { DashboardMetrics } from '@/types'
-
-// Demo tenant ID — vervang door sessie-lookup zodra auth compleet is
-const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
+import { canDo } from '@/lib/permissions'
+import { getSessionContext } from '@/lib/session'
 
 export async function GET() {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
+  if (!await canDo(userId, tenantId, 'assistants', 'read')) {
+    return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+  }
+
   try {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -21,20 +28,20 @@ export async function GET() {
           .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
           .where(
             and(
-              eq(assistants.tenantId, DEMO_TENANT_ID),
+              eq(assistants.tenantId, tenantId),
               gte(assistantRuns.createdAt, today)
             )
           ),
         db
           .select({ count: count() })
           .from(assistants)
-          .where(eq(assistants.tenantId, DEMO_TENANT_ID)),
+          .where(eq(assistants.tenantId, tenantId)),
         db
           .select({ count: count() })
           .from(assistants)
           .where(
             and(
-              eq(assistants.tenantId, DEMO_TENANT_ID),
+              eq(assistants.tenantId, tenantId),
               eq(assistants.status, AssistantStatus.ACTIVE)
             )
           ),
@@ -43,7 +50,7 @@ export async function GET() {
           .from(reviewItems)
           .where(
             and(
-              eq(reviewItems.tenantId, DEMO_TENANT_ID),
+              eq(reviewItems.tenantId, tenantId),
               eq(reviewItems.status, ReviewStatus.OPEN)
             )
           ),

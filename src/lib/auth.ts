@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { users, sessions, accounts, verifications } from '@/db/schema/auth'
 
 export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: {

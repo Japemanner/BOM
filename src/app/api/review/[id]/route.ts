@@ -3,13 +3,21 @@ import { db } from '@/db'
 import { reviewItems } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
 import { updateReviewStatusSchema } from '@/lib/validations'
-
-const DEMO_TENANT_ID = '00000000-0000-0000-0000-000000000001'
+import { canDo } from '@/lib/permissions'
+import { getSessionContext } from '@/lib/session'
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await getSessionContext()
+  if (ctx instanceof NextResponse) return ctx
+  const { userId, tenantId } = ctx
+
+  if (!await canDo(userId, tenantId, 'assistants', 'update')) {
+    return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
+  }
+
   const { id } = await params
   try {
     const body: unknown = await request.json()
@@ -28,7 +36,7 @@ export async function PATCH(
         resolvedAt: new Date(),
       })
       .where(
-        and(eq(reviewItems.id, id), eq(reviewItems.tenantId, DEMO_TENANT_ID))
+        and(eq(reviewItems.id, id), eq(reviewItems.tenantId, tenantId))
       )
       .returning()
 
