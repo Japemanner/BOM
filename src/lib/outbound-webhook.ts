@@ -33,18 +33,17 @@ export async function createOutboundJwt(
 }
 
 export interface OutboundWebhookPayload {
-  /** Het volledige chatbericht van de gebruiker */
   message: string
-  /** Volledige berichtengeschiedenis als context voor de LLM */
   history: { role: 'user' | 'assistant'; content: string }[]
-  /** Metadata die N8N kan gebruiken voor routing/logging */
-  meta: {
-    assistantId: string
-    assistantName: string
-    tenantId: string
-    runId: string
-    timestamp: string
-  }
+  assistantId: string
+  assistantName: string
+  tenantId: string
+  tenantName: string
+  userId: string
+  userName: string
+  /** Format: {tenantId}-{runId}. Beide zijn UUIDs, elk 36 tekens. */
+  traceId: string
+  timestamp: string
 }
 
 export interface OutboundWebhookResult {
@@ -72,10 +71,10 @@ export async function callOutboundWebhook(
   payload: OutboundWebhookPayload
 ): Promise<OutboundWebhookResult | OutboundWebhookError> {
   const jwt = await createOutboundJwt(secret, {
-    runId: payload.meta.runId,
-    assistantId: payload.meta.assistantId,
-    assistantName: payload.meta.assistantName,
-    tenantId: payload.meta.tenantId,
+    runId: payload.traceId.slice(37),
+    assistantId: payload.assistantId,
+    assistantName: payload.assistantName,
+    tenantId: payload.tenantId,
   })
 
   const controller = new AbortController()

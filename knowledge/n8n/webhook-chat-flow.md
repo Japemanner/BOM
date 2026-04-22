@@ -30,27 +30,28 @@ BOM stuurt naar de N8N webhook URL:
     { "role": "assistant", "content": "Hallo! Ik ben FactuurBot. Hoe kan ik je vandaag helpen?" },
     { "role": "user", "content": "Hoeveel facturen deze week?" }
   ],
-  "meta": {
-    "assistantId": "uuid-van-assistent",
-    "assistantName": "FactuurBot",
-    "tenantId": "uuid-van-tenant",
-    "runId": "uuid-van-run",
-    "timestamp": "2026-04-22T14:30:00.000Z"
-  }
+  "assistantId": "uuid-van-assistent",
+  "assistantName": "FactuurBot",
+  "tenantId": "uuid-van-tenant",
+  "tenantName": "ACME BV",
+  "userId": "uuid-van-user",
+  "userName": "Piet Jansen",
+  "traceId": "uuid-van-tenant-uuid-van-run",
+  "timestamp": "2026-04-22T14:30:00.000Z"
 }
 ```
 
-## JWT Authenticatie
+### N8N JWT validatie
 
 Elk request bevat een `Authorization: Bearer <jwt>` header.
 
 Het JWT is ondertekend met HS256, het shared secret staat in `assistants.webhook_token_encrypted` (AES-256-GCM encrypted in DB).
 
-### JWT claims
+**JWT claims** (uit de header, niet de body):
 
 | Claim | Waarde |
 |-------|--------|
-| `runId` | UUID van de run |
+| `runId` | `runId` deel van `traceId` (= alles na de eerste 36 tekens) |
 | `assistantId` | UUID van de assistent |
 | `assistantName` | Naam van de assistent |
 | `tenantId` | UUID van de tenant |
@@ -59,29 +60,20 @@ Het JWT is ondertekend met HS256, het shared secret staat in `assistants.webhook
 | `iat` | Unix timestamp |
 | `exp` | `iat + 1h` |
 
-### N8N JWT validatie
-
-In N8N HTTP Request node (of een eigen node):
+Valideer in N8N:
 
 1. Haal `Authorization` header op
 2. Strip `Bearer `
-3. Valideer met HS256 en het shared secret (uit dezelfde DB record als de webhook URL)
+3. Valideer met HS256 en het shared secret
 4. Controleer `iss === 'bom'` en `aud === 'n8n'`
 
 Voorbeeld (N8N Function node):
 
-```javascript
-const jwt = require('jsonwebtoken');
-const token = $input.first().json.headers.authorization?.replace('Bearer ', '');
-const secret = $input.first().json.webhookSecret; // Haal op uit credentials/env
-
-try {
-  const decoded = jwt.verify(token, secret, { audience: 'n8n', issuer: 'bom', algorithms: ['HS256'] });
-  return { json: { valid: true, claims: decoded } };
-} catch (err) {
-  return { json: { valid: false, error: err.message } };
-}
-```
+  ```javascript
+  // traceId = "{tenantId}-{runId}"
+  // tenantId = traceId.slice(0, 36)
+  // runId = traceId.slice(37)
+  ```
 
 ## N8N Response format
 

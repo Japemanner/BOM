@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { assistants, assistantRuns } from '@/db/schema/app'
-import { eq, and } from 'drizzle-orm'
+import { tenants } from '@/db/schema/iam'
+import { users } from '@/db/schema/auth'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
 import { callOutboundWebhook } from '@/lib/outbound-webhook'
@@ -86,6 +88,34 @@ export async function POST(request: NextRequest) {
       .returning({ id: assistantRuns.id })
 
     const runId = run?.id ?? `tmp-${Date.now()}`
+    const traceId = `${assistant.tenantId}-${runId}`
+
+    // ── Haal tenant naam + user naam op ──────────────────────────────
+    let tenantName = 'Onbekend'
+    try {
+      const [tenant] = await db
+        .select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, assistant.tenantId))
+        .limit(1)
+      if (tenant?.name) tenantName = tenant.name
+    } catch {
+      // Tenant naam niet kritisch; val terug op 'Onbekend'
+    }
+
+    let userName = session.user?.name ?? 'Onbekend'
+    if (userName === 'Onbekend' || !userName) {
+      try {
+        const [dbUser] = await db
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1)
+        if (dbUser?.name) userName = dbUser.name
+      } catch {
+        // Naam ophalen mislukt; fallback 'Onbekend' is acceptabel
+      }
+    }
 
     // ── Decrypt secret ────────────────────────────────────────────────
     let secret: string
@@ -100,16 +130,18 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Roep N8N webhook aan ────────────────────────────────────────
+    const timestamp = new Date().toISOString()
     const result = await callOutboundWebhook(assistant.webhookUrl, secret, {
       message,
       history,
-      meta: {
-        assistantId,
-        assistantName: assistant.name,
-        tenantId: assistant.tenantId,
-        runId,
-        timestamp: new Date().toISOString(),
-      },
+      assistantId,
+      assistantName: assistant.name,
+      tenantId: assistant.tenantId,
+      tenantName,
+      userId,
+      userName,
+      traceId,
+      timestamp,
     })
 
     if (!result.ok) {
