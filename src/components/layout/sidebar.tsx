@@ -20,8 +20,8 @@ interface NavItem {
 }
 
 const WORKSPACE_ITEMS: NavItem[] = [
-  { href: '/',              icon: LayoutGrid,    label: 'Mijn assistenten' },
-  { href: '#history',        icon: BookOpen,      label: 'Historie' },
+   { href: '/',            icon: LayoutGrid,    label: 'Mijn assistenten' },
+   { href: '/history',       icon: BookOpen,      label: 'Historie' },
 ]
 
 const MANAGE_ITEMS: NavItem[] = [

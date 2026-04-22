@@ -767,14 +767,6 @@ export function AssistantDashboard({
               {searchQuery ? `Geen resultaten voor "${searchQuery}"` : 'Nog geen assistenten'}
             </div>
           )}
-
-          {/* Historie */}
-          <div style={{ marginTop: 24 }}>
-            <p style={{ fontSize: 10, fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-              Historie
-            </p>
-            <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>Recent activiteit wordt hier getoond.</p>
-          </div>
         </div>
 
         {/* Right: chat window of config panel */}

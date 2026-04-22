@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
       .insert(assistantRuns)
       .values({
         assistantId,
+        userId,
+        tenantId: assistant.tenantId,
         status: 'running',
         input: { message, historyLength: history.length },
       })
@@ -153,9 +155,17 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Update run met succes ────────────────────────────────────────
+    const messagesPayload = [
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message },
+      { role: 'assistant', content: result.text },
+    ]
     await db
       .update(assistantRuns)
-      .set({ status: 'success', output: { text: result.text } })
+      .set({
+        status: 'success',
+        output: { text: result.text, messages: messagesPayload },
+      })
       .where(eq(assistantRuns.id, runId))
 
     return NextResponse.json({
