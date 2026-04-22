@@ -573,7 +573,6 @@ export function AssistantDashboard({
             name: configForm.name,
             description: configForm.description,
             type: 'custom',
-            tenantId: '00000000-0000-0000-0000-000000000001',
           }),
         })
         if (!res.ok) throw new Error()
