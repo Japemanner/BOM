@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   Search,
   Plus,
@@ -196,17 +196,32 @@ function ChatWindow({
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Scroll naar onder bij nieuwe berichten
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  let msgCounter = 0
+  const genMsgId = () => {
+    msgCounter += 1
+    return `${Date.now()}-${msgCounter}`
+  }
 
   const handleSend = async () => {
     if (!input.trim()) return
+    const text = input.trim()
+    setInput('')
+
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: genMsgId(),
       role: 'user',
-      content: input.trim(),
+      content: text,
       timestamp: new Date().toISOString(),
     }
+
     setMessages((prev) => [...prev, userMsg])
-    setInput('')
     setLoading(true)
 
     // Placeholder: vraag later aansluiten op API
@@ -214,7 +229,7 @@ function ChatWindow({
       setMessages((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: genMsgId(),
           role: 'assistant',
           content: 'Dit is een placeholder-antwoord — aansluiting op LLM API komt binnenkort.',
           timestamp: new Date().toISOString(),
@@ -275,26 +290,37 @@ function ChatWindow({
           </div>
         ))}
         {loading && (
-          <div style={{ alignSelf: 'flex-start', fontSize: 11, color: '#9CA3AF', padding: '4px 8px' }}>
-            <span style={{ display: 'inline-block', animation: 'pulse 1.4s infinite' }}>...</span>
+          <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: '6px 10px' }}>
+            {<span key={1} style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', display: 'inline-block', animation: 'typing 1.2s infinite 0s' }} />}
+            {<span key={2} style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', display: 'inline-block', animation: 'typing 1.2s infinite 0.2s' }} />}
+            {<span key={3} style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', display: 'inline-block', animation: 'typing 1.2s infinite 0.4s' }} />}
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
       <div style={{ padding: '10px 12px', borderTop: '0.5px solid #EAECEF', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
             placeholder="Typ een bericht..."
             disabled={loading}
+            rows={1}
             style={{
-              flex: 1, height: 34, padding: '0 10px',
+              flex: 1, minHeight: 34, maxHeight: 120, padding: '8px 10px',
               borderRadius: 7, border: '0.5px solid #E2E8F0',
               fontSize: 12, outline: 'none', fontFamily: 'inherit',
-              background: '#fff', color: '#0F172A',
+              background: loading ? '#F9FAFB' : '#fff', color: '#0F172A',
+              resize: 'none', lineHeight: 1.4,
+              opacity: loading ? 0.6 : 1,
             }}
           />
           <button
@@ -306,13 +332,19 @@ function ChatWindow({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
               opacity: loading || !input.trim() ? 0.5 : 1,
+              flexShrink: 0,
             }}
           >
             <Send size={13} />
           </button>
         </div>
       </div>
-      <style>{`@keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }`}</style>
+      <style>{`
+        @keyframes typing {
+          0%, 100% { opacity: 0.3; transform: translateY(0); }
+          50% { opacity: 1; transform: translateY(-3px); }
+        }
+      `}</style>
     </div>
   )
 }
