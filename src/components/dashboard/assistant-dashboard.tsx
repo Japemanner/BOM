@@ -224,19 +224,55 @@ function ChatWindow({
     setMessages((prev) => [...prev, userMsg])
     setLoading(true)
 
-    // Placeholder: vraag later aansluiten op API
-    setTimeout(() => {
+    try {
+      const history = messages.map((m) => ({ role: m.role, content: m.content }))
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assistantId: assistant.id,
+          message: text,
+          history,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Onbekende fout' }))
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: genMsgId(),
+            role: 'assistant',
+            content: `⚠️ ${data.error ?? 'Fout bij verwerken'}`,
+            timestamp: new Date().toISOString(),
+          },
+        ])
+        return
+      }
+
+      const data = await res.json()
       setMessages((prev) => [
         ...prev,
         {
           id: genMsgId(),
           role: 'assistant',
-          content: 'Dit is een placeholder-antwoord — aansluiting op LLM API komt binnenkort.',
+          content: typeof data.text === 'string' ? data.text : 'Geen antwoord ontvangen.',
           timestamp: new Date().toISOString(),
         },
       ])
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: genMsgId(),
+          role: 'assistant',
+          content: `⚠️ Netwerkfout: ${err instanceof Error ? err.message : String(err)}`,
+          timestamp: new Date().toISOString(),
+        },
+      ])
+    } finally {
       setLoading(false)
-    }, 1200)
+    }
   }
 
   return (
