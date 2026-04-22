@@ -51,13 +51,6 @@ const MODELS = [
   { value: 'claude-haiku-4.5',  label: 'Claude Haiku 4.5' },
 ]
 
-const TEMPLATE_CHIPS = [
-  { emoji: '💬', label: 'Klantenservice' },
-  { emoji: '📄', label: 'Offerte' },
-  { emoji: '❓', label: 'FAQ bot' },
-  { emoji: '📊', label: 'Data analist' },
-]
-
 const EMPTY_FORM: ConfigForm = {
   name: '',
   description: '',
@@ -992,7 +985,7 @@ export function AssistantDashboard({
             </div>
           )}
 
-          {/* Template chips */}
+          {/* Historie */}
           <div style={{ marginTop: 24 }}>
             <p
               style={{
@@ -1004,43 +997,11 @@ export function AssistantDashboard({
                 marginBottom: 10,
               }}
             >
-              Templates
+              Historie
             </p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {TEMPLATE_CHIPS.map((chip) => (
-                <button
-                  key={chip.label}
-                  data-testid="template-chip"
-                  onClick={() => handleNew(chip.label)}
-                  style={{
-                    height: 32,
-                    padding: '0 14px',
-                    borderRadius: 20,
-                    border: '0.5px solid #E5E7EB',
-                    background: '#fff',
-                    fontSize: 12,
-                    color: '#374151',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 7,
-                    fontFamily: 'inherit',
-                    transition: 'border-color 0.1s, color 0.1s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = TEAL
-                    e.currentTarget.style.color = TEAL
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#E5E7EB'
-                    e.currentTarget.style.color = '#374151'
-                  }}
-                >
-                  <span style={{ fontSize: 13 }}>{chip.emoji}</span>
-                  {chip.label}
-                </button>
-              ))}
-            </div>
+            <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
+              Recent activiteit wordt hier getoond.
+            </p>
           </div>
         </div>
 

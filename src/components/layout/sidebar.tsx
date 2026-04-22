@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutGrid,
   BookOpen,
-  MessageSquare,
   BarChart2,
   Settings,
   Plug,
@@ -22,8 +21,7 @@ interface NavItem {
 
 const WORKSPACE_ITEMS: NavItem[] = [
   { href: '/',              icon: LayoutGrid,    label: 'Mijn assistenten' },
-  { href: '/templates',    icon: BookOpen,       label: 'Templates' },
-  { href: '/conversations', icon: MessageSquare, label: 'Gesprekken' },
+  { href: '/',              icon: BookOpen,      label: 'Historie' },
 ]
 
 const MANAGE_ITEMS: NavItem[] = [
