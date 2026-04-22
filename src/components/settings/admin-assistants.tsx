@@ -577,7 +577,8 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
                 Outbound webhook (N8N)
               </p>
               <p style={{ fontSize: 11, color: '#94A3B8', margin: '-6px 0 0' }}>
-                BOM stuurt resultaten naar deze URL met bearer token
+                BOM signet een JWT met shared secret en stuurt dit naar N8N.
+                Stel in N8N hetzelfde secret in als validatie key.
               </p>
 
               <FormField label="Webhook URL (N8N)">
@@ -590,14 +591,14 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
                 />
               </FormField>
 
-              <FormField label="Webhook token">
+              <FormField label="JWT Secret (N8N)">
                 {form.webhookTokenEditing ? (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input
                       autoFocus
                       value={form.webhookToken}
                       onChange={(e) => setForm((f) => ({ ...f, webhookToken: e.target.value }))}
-                      placeholder="Nieuw token invoeren"
+                      placeholder="Minimaal 32 tekens — stel in N8N in als validatie key"
                       type="text"
                       style={{ ...fieldStyle, flex: 1 }}
                     />
@@ -640,7 +641,7 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
                 Inbound webhook
               </p>
               <p style={{ fontSize: 11, color: '#94A3B8', margin: '-6px 0 0' }}>
-                N8N stuurt berichten naar BOM met bearer token
+                N8N authenticeert met SHA-256 hashed bearer tokens naar BOM.
               </p>
 
               {tokensForAssistant(editingId).length > 0 && (

@@ -4,6 +4,7 @@ import { assistantRuns, assistants } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
+import { createOutboundJwt } from '@/lib/outbound-webhook'
 import { RunStatus } from '@/types'
 
 const bodySchema = z.object({
@@ -19,23 +20,30 @@ const bodySchema = z.object({
 async function fireOutboundWebhook(
   webhookUrl: string,
   webhookTokenEncrypted: string,
-  payload: {
+  claims: {
     runId: string
     assistantId: string
     assistantName: string
+    tenantId: string
     output: string
     timestamp: string
   }
 ): Promise<void> {
   try {
-    const token = decrypt(webhookTokenEncrypted)
+    const secret = decrypt(webhookTokenEncrypted)
+    const jwt = await createOutboundJwt(secret, {
+      runId: claims.runId,
+      assistantId: claims.assistantId,
+      assistantName: claims.assistantName,
+      tenantId: claims.tenantId,
+    })
     await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${jwt}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(claims),
     })
   } catch (err) {
     console.error('[assistant-runs outbound webhook mislukt]', err)
@@ -77,6 +85,7 @@ export async function POST(request: NextRequest) {
           name: assistants.name,
           webhookUrl: assistants.webhookUrl,
           webhookTokenEncrypted: assistants.webhookTokenEncrypted,
+          tenantId: assistants.tenantId,
         })
         .from(assistants)
         .where(eq(assistants.id, assistantId))
@@ -87,6 +96,7 @@ export async function POST(request: NextRequest) {
           runId: run.id,
           assistantId,
           assistantName: assistant.name,
+          tenantId: assistant.tenantId,
           output,
           timestamp: new Date().toISOString(),
         })
