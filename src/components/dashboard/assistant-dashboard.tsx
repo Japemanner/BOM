@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   Search,
   Plus,
-  Star,
   ChevronRight,
   X,
   Zap,
   Loader2,
+  Send,
+  Bot,
 } from 'lucide-react'
 import { AssistantCard } from './assistant-card'
 import { useOptimisticToggle } from '@/hooks/use-optimistic-toggle'
@@ -40,6 +40,13 @@ interface ConfigForm {
   temperature: number
   memory: boolean
   webSearch: boolean
+}
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -85,77 +92,64 @@ function Toggle({
     <button
       onClick={() => onChange(!checked)}
       style={{
-        width: 34,
-        height: 18,
-        borderRadius: 9,
-        border: 'none',
+        width: 34, height: 18, borderRadius: 9, border: 'none',
         background: checked ? TEAL : '#E5E7EB',
-        position: 'relative',
-        cursor: 'pointer',
-        transition: 'background 0.2s',
-        flexShrink: 0,
-        padding: 0,
+        position: 'relative', cursor: 'pointer',
+        transition: 'background 0.2s', flexShrink: 0, padding: 0,
       }}
     >
-      <span
-        style={{
-          position: 'absolute',
-          width: 14,
-          height: 14,
-          borderRadius: '50%',
-          background: '#fff',
-          top: 2,
-          left: checked ? 18 : 2,
-          transition: 'left 0.15s',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-        }}
-      />
+      <span style={{
+        position: 'absolute', width: 14, height: 14,
+        borderRadius: '50%', background: '#fff',
+        top: 2, left: checked ? 18 : 2,
+        transition: 'left 0.15s',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+      }} />
     </button>
   )
 }
 
 const INPUT_STYLE: React.CSSProperties = {
-  width: '100%',
-  height: 30,
-  padding: '0 10px',
-  borderRadius: 7,
-  border: '0.5px solid #E5E7EB',
-  fontSize: 12,
-  outline: 'none',
-  boxSizing: 'border-box',
-  background: '#fff',
-  color: '#111827',
-  fontFamily: 'inherit',
+  width: '100%', height: 30, padding: '0 10px',
+  borderRadius: 7, border: '0.5px solid #E5E7EB',
+  fontSize: 12, outline: 'none', boxSizing: 'border-box',
+  background: '#fff', color: '#111827', fontFamily: 'inherit',
 }
 
-function Field({
-  label,
-  rightLabel,
-  children,
+function SmallToggle({
+  checked,
+  onChange,
 }: {
-  label: string
-  rightLabel?: string
-  children: React.ReactNode
+  checked: boolean
+  onChange: (v: boolean) => void
 }) {
   return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 32, height: 17, borderRadius: 9, border: 'none', padding: 0,
+        background: checked ? TEAL : '#E2E8F0',
+        position: 'relative', cursor: 'pointer',
+        transition: 'background 0.2s', flexShrink: 0,
+      }}
+    >
+      <span style={{
+        position: 'absolute', width: 13, height: 13, borderRadius: '50%',
+        background: '#fff', top: 2, left: checked ? 17 : 2,
+        transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+      }} />
+    </button>
+  )
+}
+
+function Field({ label, rightLabel, children }: { label: string; rightLabel?: string; children: React.ReactNode }) {
+  return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 5,
-          alignItems: 'center',
-        }}
-      >
-        <label
-          style={{ fontSize: 11, fontWeight: 500, color: '#374151', display: 'block' }}
-        >
-          {label}
-        </label>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, alignItems: 'center' }}>
+        <label style={{ fontSize: 11, fontWeight: 500, color: '#374151', display: 'block' }}>{label}</label>
         {rightLabel !== undefined && (
-          <span style={{ fontSize: 11, color: '#6B7280', fontVariantNumeric: 'tabular-nums' }}>
-            {rightLabel}
-          </span>
+          <span style={{ fontSize: 11, color: '#6B7280', fontVariantNumeric: 'tabular-nums' }}>{rightLabel}</span>
         )}
       </div>
       {children}
@@ -163,15 +157,7 @@ function Field({
   )
 }
 
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
+function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <span style={{ fontSize: 12, color: '#374151' }}>{label}</span>
@@ -180,294 +166,256 @@ function ToggleRow({
   )
 }
 
-// ── Config Panel ──────────────────────────────────────────────────────────────
-
-interface ConfigPanelProps {
-  selectedId: string | 'new' | null
-  assistant: Assistant | null
-  currentStatus: AssistantStatus | null
-  form: ConfigForm
-  onFormChange: (form: ConfigForm) => void
-  onToggleActive: (newStatus: 'active' | 'paused') => void
-  onSave: () => void
-  onClose: () => void
-  isSaving: boolean
+function ModalField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ fontSize: 11, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
 }
 
-function ConfigPanel({
-  selectedId,
+// ── Chat Window ─────────────────────────────────────────────────────────────
+
+function ChatWindow({
   assistant,
-  currentStatus,
+  onClose,
+}: {
+  assistant: Assistant
+  onClose: () => void
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: `Hallo! Ik ben ${assistant.name}. Hoe kan ik je vandaag helpen?`,
+      timestamp: new Date().toISOString(),
+    },
+  ])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSend = async () => {
+    if (!input.trim()) return
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date().toISOString(),
+    }
+    setMessages((prev) => [...prev, userMsg])
+    setInput('')
+    setLoading(true)
+
+    // Placeholder: vraag later aansluiten op API
+    setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Dit is een placeholder-antwoord — aansluiting op LLM API komt binnenkort.',
+          timestamp: new Date().toISOString(),
+        },
+      ])
+      setLoading(false)
+    }, 1200)
+  }
+
+  return (
+    <div
+      style={{
+        width: 340, flexShrink: 0, borderLeft: '0.5px solid #EAECEF',
+        display: 'flex', flexDirection: 'column', background: '#FAFBFC',
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        padding: '14px 14px 12px', borderBottom: '0.5px solid #EAECEF',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 8, background: '#ECFDF5',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Bot size={14} color={TEAL} />
+          </div>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: 0 }}>{assistant.name}</p>
+            <p style={{ fontSize: 11, color: '#9CA3AF', margin: 0 }}>{assistant.type}</p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#9CA3AF' }}
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            style={{
+              alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: '85%',
+              background: msg.role === 'user' ? '#3B82F6' : '#fff',
+              color: msg.role === 'user' ? '#fff' : '#0F172A',
+              padding: '8px 12px', borderRadius: 12,
+              fontSize: 12, lineHeight: 1.45,
+              border: msg.role === 'user' ? 'none' : '0.5px solid #EAECEF',
+            }}
+          >
+            {msg.content}
+          </div>
+        ))}
+        {loading && (
+          <div style={{ alignSelf: 'flex-start', fontSize: 11, color: '#9CA3AF', padding: '4px 8px' }}>
+            <span style={{ display: 'inline-block', animation: 'pulse 1.4s infinite' }}>...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{ padding: '10px 12px', borderTop: '0.5px solid #EAECEF', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Typ een bericht..."
+            disabled={loading}
+            style={{
+              flex: 1, height: 34, padding: '0 10px',
+              borderRadius: 7, border: '0.5px solid #E2E8F0',
+              fontSize: 12, outline: 'none', fontFamily: 'inherit',
+              background: '#fff', color: '#0F172A',
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={loading || !input.trim()}
+            style={{
+              width: 32, height: 32, borderRadius: 7,
+              border: 'none', background: TEAL, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+              opacity: loading || !input.trim() ? 0.5 : 1,
+            }}
+          >
+            <Send size={13} />
+          </button>
+        </div>
+      </div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:1} }`}</style>
+    </div>
+  )
+}
+
+// ── Config Panel (enkel voor "Nieuw") ──────────────────────────────────────
+
+function ConfigPanel({
+  assistant,
   form,
   onFormChange,
   onToggleActive,
   onSave,
   onClose,
   isSaving,
-}: ConfigPanelProps) {
-  const isNew = selectedId === 'new'
-  const isEmpty = selectedId === null
-
-  if (isEmpty) {
-    return (
-      <div
-        style={{
-          width: 240,
-          flexShrink: 0,
-          borderLeft: '0.5px solid #EAECEF',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 20,
-          background: '#FAFBFC',
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: '#F3F4F6',
-              margin: '0 auto 12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Zap size={18} color="#D1D5DB" />
-          </div>
-          <p
-            style={{
-              fontSize: 12,
-              color: '#9CA3AF',
-              margin: 0,
-              lineHeight: 1.6,
-            }}
-          >
-            Selecteer een assistent
-            <br />
-            om te configureren
-          </p>
-        </div>
-      </div>
-    )
-  }
-
+}: {
+  assistant: Assistant | null
+  form: ConfigForm
+  onFormChange: (form: ConfigForm) => void
+  onToggleActive: (newStatus: 'active' | 'paused') => void
+  onSave: () => void
+  onClose: () => void
+  isSaving: boolean
+}) {
   return (
     <div
       style={{
-        width: 240,
-        flexShrink: 0,
-        borderLeft: '0.5px solid #EAECEF',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#FAFBFC',
+        width: 260, flexShrink: 0, borderLeft: '0.5px solid #EAECEF',
+        display: 'flex', flexDirection: 'column', background: '#FAFBFC',
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          padding: '14px 14px 12px',
-          borderBottom: '0.5px solid #EAECEF',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 8,
-          flexShrink: 0,
-        }}
-      >
+      <div style={{
+        padding: '14px 14px 12px', borderBottom: '0.5px solid #EAECEF',
+        display: 'flex', alignItems: 'flex-start', gap: 8, flexShrink: 0,
+      }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              color: '#0F172A',
-              margin: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {isNew ? 'Nieuwe assistent' : (form.name || assistant?.name || '—')}
+          <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {form.name || 'Nieuwe assistent'}
           </p>
           <p style={{ fontSize: 11, color: '#9CA3AF', margin: '2px 0 0' }}>
-            {isNew ? 'Instellen en opslaan' : (assistant?.type ?? 'assistent')}
+            {assistant ? `Bewerken` : 'Instellen en opslaan'}
           </p>
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 2,
-            color: '#9CA3AF',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#9CA3AF' }}>
           <X size={14} />
         </button>
       </div>
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {/* Naam */}
-          <Field label="Naam">
-            <input
-              value={form.name}
-              onChange={(e) => onFormChange({ ...form, name: e.target.value })}
-              placeholder="Assistent naam"
-              style={INPUT_STYLE}
-            />
-          </Field>
+          <ModalField label="Naam *">
+            <input value={form.name} onChange={(e) => onFormChange({ ...form, name: e.target.value })} placeholder="Assistent naam" style={{ ...INPUT_STYLE, height: 34 }} />
+          </ModalField>
 
-          {/* Systeemprompt */}
-          <Field label="Systeemprompt">
-            <textarea
-              value={form.systemPrompt}
-              onChange={(e) => onFormChange({ ...form, systemPrompt: e.target.value })}
+          <ModalField label="Systeemprompt">
+            <textarea value={form.systemPrompt} onChange={(e) => onFormChange({ ...form, systemPrompt: e.target.value })}
               placeholder="Je bent een behulpzame assistent die..."
-              style={{
-                ...INPUT_STYLE,
-                height: 64,
-                resize: 'none',
-                padding: '7px 10px',
-              }}
-            />
-          </Field>
+              style={{ ...INPUT_STYLE, height: 64, resize: 'none', padding: '7px 10px' }} />
+          </ModalField>
 
-          {/* Taalmodel */}
-          <Field label="Taalmodel">
-            <select
-              value={form.model}
-              onChange={(e) => onFormChange({ ...form, model: e.target.value })}
-              style={{ ...INPUT_STYLE, background: '#fff', cursor: 'pointer' }}
-            >
-              {MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
+          <ModalField label="Taalmodel">
+            <select value={form.model} onChange={(e) => onFormChange({ ...form, model: e.target.value })}
+              style={{ ...INPUT_STYLE, height: 34, background: '#fff', cursor: 'pointer' }}>
+              {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
+          </ModalField>
+
+          <Field label="Temperatuur" rightLabel={form.temperature.toFixed(1)}>
+            <input type="range" min="0" max="1" step="0.1" value={form.temperature}
+              onChange={(e) => onFormChange({ ...form, temperature: parseFloat(e.target.value) })}
+              style={{ width: '100%', accentColor: TEAL, cursor: 'pointer', margin: '4px 0 0' }} />
           </Field>
 
-          {/* Temperatuur */}
-          <Field
-            label="Temperatuur"
-            rightLabel={form.temperature.toFixed(1)}
-          >
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              value={form.temperature}
-              onChange={(e) =>
-                onFormChange({ ...form, temperature: parseFloat(e.target.value) })
-              }
-              style={{
-                width: '100%',
-                accentColor: TEAL,
-                cursor: 'pointer',
-                margin: '4px 0 0',
-              }}
-            />
-          </Field>
-
-          {/* Divider */}
           <div style={{ borderTop: '0.5px solid #EAECEF' }} />
 
-          {/* Toggles */}
-          <ToggleRow
-            label="Geheugen"
-            checked={form.memory}
-            onChange={(v) => onFormChange({ ...form, memory: v })}
-          />
-          <ToggleRow
-            label="Webzoeken"
-            checked={form.webSearch}
-            onChange={(v) => onFormChange({ ...form, webSearch: v })}
-          />
-          {!isNew && (
-            <ToggleRow
-              label="Actief"
-              checked={currentStatus === 'active'}
-              onChange={(v) => onToggleActive(v ? 'active' : 'paused')}
-            />
+          <ToggleRow label="Geheugen" checked={form.memory} onChange={(v) => onFormChange({ ...form, memory: v })} />
+          <ToggleRow label="Webzoeken" checked={form.webSearch} onChange={(v) => onFormChange({ ...form, webSearch: v })} />
+          {assistant && (
+            <ToggleRow label="Actief" checked={assistant.status === 'active'}
+              onChange={(v) => onToggleActive(v ? 'active' : 'paused')} />
           )}
         </div>
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          padding: '12px 14px',
-          borderTop: '0.5px solid #EAECEF',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 7,
-          flexShrink: 0,
-        }}
-      >
-        {!isNew && (
-          <button
-            style={{
-              height: 32,
-              borderRadius: 7,
-              border: 'none',
-              background: TEAL,
-              color: '#fff',
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              fontFamily: 'inherit',
-            }}
-          >
-            <Zap size={12} strokeWidth={2.5} />
-            Assistent starten
-          </button>
-        )}
+      <div style={{ padding: '12px 14px', borderTop: '0.5px solid #EAECEF', display: 'flex', flexDirection: 'column', gap: 7, flexShrink: 0 }}>
         <button
           onClick={onSave}
           disabled={isSaving}
           style={{
-            height: 32,
-            borderRadius: 7,
-            border: `0.5px solid ${isNew ? 'transparent' : TEAL}`,
-            background: isNew ? TEAL : 'transparent',
-            color: isNew ? '#fff' : TEAL,
-            fontSize: 12,
-            fontWeight: 500,
+            height: 34, borderRadius: 7, border: 'none',
+            background: TEAL, color: '#fff', fontSize: 12, fontWeight: 500,
             cursor: isSaving ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            opacity: isSaving ? 0.6 : 1,
-            fontFamily: 'inherit',
-            transition: 'opacity 0.15s',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            opacity: isSaving ? 0.6 : 1, fontFamily: 'inherit',
           }}
         >
           {isSaving ? (
-            <>
-              <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
-              Opslaan...
-            </>
-          ) : isNew ? (
-            <>
-              <Plus size={12} />
-              Aanmaken
-            </>
+            <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> Opslaan...</>
           ) : (
-            'Opslaan'
+            <><Zap size={12} strokeWidth={2.5} /> {assistant ? 'Opslaan' : 'Aanmaken'}</>
           )}
         </button>
       </div>
@@ -486,10 +434,9 @@ export function AssistantDashboard({
   metrics,
   assistants: initial,
 }: AssistantDashboardProps) {
-  const router = useRouter()
-
   const [localAssistants, setLocalAssistants] = useState<Assistant[]>(initial)
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
+  const [chatMode, setChatMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [configForm, setConfigForm] = useState<ConfigForm>(EMPTY_FORM)
   const [isSaving, setIsSaving] = useState(false)
@@ -497,7 +444,6 @@ export function AssistantDashboard({
 
   const { statusOverrides } = useAssistantsStore()
 
-  // Pas store-overrides toe op de lokale assistent-lijst
   const assistantsWithOverrides = useMemo(
     () => localAssistants.map((a) => ({
       ...a,
@@ -516,12 +462,12 @@ export function AssistantDashboard({
     setTimeout(() => setToast(null), 3000)
   }, [])
 
-  // Open config panel for existing assistant
   const handleCardClick = useCallback(
     (id: string) => {
       const a = localAssistants.find((x) => x.id === id)
       if (!a) return
       setSelectedId(id)
+      setChatMode(true)
       setConfigForm({
         name: a.name,
         description: a.description ?? '',
@@ -535,13 +481,12 @@ export function AssistantDashboard({
     [localAssistants]
   )
 
-  // Open config panel in new-mode, optionally pre-fill name
-  const handleNew = useCallback((prefilledName = '') => {
+  const handleNew = useCallback(() => {
     setSelectedId('new')
-    setConfigForm({ ...EMPTY_FORM, name: prefilledName })
+    setChatMode(false)
+    setConfigForm({ ...EMPTY_FORM })
   }, [])
 
-  // Toggle active/paused via optimistic hook
   const handleToggleActive = useCallback(
     async (newStatus: 'active' | 'paused') => {
       if (!selectedId || selectedId === 'new') return
@@ -550,7 +495,6 @@ export function AssistantDashboard({
     [selectedId, toggle]
   )
 
-  // Save — either create or update
   const handleSave = useCallback(async () => {
     if (!configForm.name.trim()) {
       showToast('Naam is verplicht', false)
@@ -572,7 +516,7 @@ export function AssistantDashboard({
         const created = (await res.json()) as Assistant
         setLocalAssistants((prev) => [created, ...prev])
         setSelectedId(created.id)
-        setConfigForm((f) => ({ ...f, name: created.name, description: created.description }))
+        setChatMode(true)
         showToast(`${created.name} aangemaakt`)
       } else if (selectedId) {
         const res = await fetch(`/api/assistants/${selectedId}`, {
@@ -601,7 +545,11 @@ export function AssistantDashboard({
     }
   }, [selectedId, configForm, showToast])
 
-  // Filtered + sorted assistants — paused (offline) worden niet getoond
+  const handleClose = useCallback(() => {
+    setSelectedId(null)
+    setChatMode(false)
+  }, [])
+
   const displayed = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
     const withStatus = assistantsWithOverrides.map((a) => ({
@@ -612,10 +560,9 @@ export function AssistantDashboard({
     const visible = withStatus.filter((a) => a.status !== 'paused')
 
     const filtered = q
-      ? visible.filter(
-          (a) =>
-            a.name.toLowerCase().includes(q) ||
-            a.description.toLowerCase().includes(q)
+      ? visible.filter((a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.description.toLowerCase().includes(q)
         )
       : visible
 
@@ -635,7 +582,7 @@ export function AssistantDashboard({
       ? (localAssistants.find((a) => a.id === selectedId) ?? null)
       : null
 
-  const currentStatus =
+  const selectedStatus =
     selectedId && selectedId !== 'new'
       ? (states.get(selectedId) ?? selectedAssistant?.status ?? null)
       : null
@@ -646,97 +593,40 @@ export function AssistantDashboard({
   const toastIsError = toast?.ok === false || (errorMessage !== null && toast === null)
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        overflow: 'hidden',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* ── Topbar ──────────────────────────────────────────────────────── */}
       <div
         style={{
-          height: 52,
-          background: '#fff',
-          borderBottom: '0.5px solid #EAECEF',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 20px',
-          gap: 16,
-          flexShrink: 0,
+          height: 52, background: '#fff', borderBottom: '0.5px solid #EAECEF',
+          display: 'flex', alignItems: 'center', padding: '0 20px', gap: 16, flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            fontSize: 14,
-            fontWeight: 500,
-            color: '#0F172A',
-            flexShrink: 0,
-          }}
-        >
+        <span style={{ fontSize: 14, fontWeight: 500, color: '#0F172A', flexShrink: 0 }}>
           Mijn assistenten
         </span>
 
-        {/* Search */}
-        <div
-          style={{
-            flex: 1,
-            maxWidth: 320,
-            position: 'relative',
-          }}
-        >
-          <Search
-            size={13}
-            color="#9CA3AF"
-            style={{
-              position: 'absolute',
-              left: 10,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              pointerEvents: 'none',
-            }}
-          />
+        <div style={{ flex: 1, maxWidth: 320, position: 'relative' }}>
+          <Search size={13} color="#9CA3AF" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Doorzoek assistenten..."
             style={{
-              width: '100%',
-              height: 32,
-              paddingLeft: 32,
-              paddingRight: 12,
-              border: '0.5px solid #E5E7EB',
-              borderRadius: 8,
-              fontSize: 12,
-              outline: 'none',
-              boxSizing: 'border-box',
-              color: '#374151',
-              background: '#F9FAFB',
-              fontFamily: 'inherit',
+              width: '100%', height: 32, paddingLeft: 32, paddingRight: 12,
+              border: '0.5px solid #E5E7EB', borderRadius: 8, fontSize: 12,
+              outline: 'none', boxSizing: 'border-box', color: '#374151',
+              background: '#F9FAFB', fontFamily: 'inherit',
             }}
           />
         </div>
 
-        {/* + Nieuw */}
         <button
-          onClick={() => handleNew()}
+          onClick={handleNew}
           style={{
-            marginLeft: 'auto',
-            height: 32,
-            padding: '0 14px',
-            borderRadius: 8,
-            background: TEAL,
-            color: '#fff',
-            border: 'none',
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            flexShrink: 0,
-            fontFamily: 'inherit',
+            marginLeft: 'auto', height: 32, padding: '0 14px', borderRadius: 8,
+            background: TEAL, color: '#fff', border: 'none', fontSize: 12,
+            fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center',
+            gap: 6, flexShrink: 0, fontFamily: 'inherit',
           }}
         >
           <Plus size={13} strokeWidth={2.5} />
@@ -744,218 +634,50 @@ export function AssistantDashboard({
         </button>
       </div>
 
-      {/* ── Main area (cards + config panel) ──────────────────────────── */}
+      {/* ── Main area ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         {/* Left: scrollable content */}
         <div
           style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '18px 20px 24px',
-            minWidth: 0,
+            flex: 1, overflowY: 'auto', padding: '18px 20px 24px', minWidth: 0,
           }}
         >
-
           {/* Stats bar */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 8,
-              marginBottom: 14,
-            }}
-          >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
             {[
               { label: 'bespaard vandaag', value: `${savedHours}u` },
-              { label: 'actief',           value: `${activeCount} van ${metrics.totalCount}` },
-              { label: 'taken vandaag',    value: String(metrics.runsToday) },
+              { label: 'actief', value: `${activeCount} van ${metrics.totalCount}` },
+              { label: 'taken vandaag', value: String(metrics.runsToday) },
             ].map((m) => (
-              <div
-                key={m.label}
-                style={{
-                  background: '#fff',
-                  border: '0.5px solid #EAECEF',
-                  borderRadius: 10,
-                  padding: '11px 14px',
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: 10,
-                    color: '#9CA3AF',
-                    margin: '0 0 5px',
-                    textTransform: 'lowercase',
-                  }}
-                >
-                  {m.label}
-                </p>
-                <p
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 500,
-                    color: '#0F172A',
-                    margin: 0,
-                    lineHeight: 1,
-                  }}
-                >
-                  {m.value}
-                </p>
+              <div key={m.label} style={{ background: '#fff', border: '0.5px solid #EAECEF', borderRadius: 10, padding: '11px 14px' }}>
+                <p style={{ fontSize: 10, color: '#9CA3AF', margin: '0 0 5px', textTransform: 'lowercase' }}>{m.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 500, color: '#0F172A', margin: 0, lineHeight: 1 }}>{m.value}</p>
               </div>
             ))}
           </div>
 
-          {/* Quick-start banner */}
-          <div
-            style={{
-              background: '#fff',
-              border: '0.5px solid #EAECEF',
-              borderRadius: 10,
-              padding: '12px 16px',
-              marginBottom: 16,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-            }}
-          >
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 9,
-                background: '#ECFDF5',
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Star size={15} color={TEAL} fill={TEAL} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <p
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: '#0F172A',
-                  margin: 0,
-                }}
-              >
-                Snel starten
-              </p>
-              <p
-                style={{ fontSize: 11, color: '#9CA3AF', margin: '2px 0 0' }}
-              >
-                Activeer je eerste assistent of gebruik een template
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              <button
-                style={{
-                  height: 30,
-                  padding: '0 12px',
-                  borderRadius: 7,
-                  border: '0.5px solid #E5E7EB',
-                  background: '#fff',
-                  fontSize: 12,
-                  color: '#374151',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Advies
-              </button>
-              <button
-                onClick={() => handleNew()}
-                style={{
-                  height: 30,
-                  padding: '0 12px',
-                  borderRadius: 7,
-                  border: 'none',
-                  background: TEAL,
-                  fontSize: 12,
-                  color: '#fff',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontFamily: 'inherit',
-                }}
-              >
-                <Plus size={12} strokeWidth={2.5} />
-                Nieuw
-              </button>
-            </div>
-          </div>
-
           {/* Error alerts */}
           {errorAssistants.map((a) => (
-            <div
-              key={a.id}
-              onClick={() => router.push(`/assistants/${a.id}?tab=connection`)}
-              style={{
-                background: '#FEF2F2',
-                border: '0.5px solid #FECACA',
-                borderRadius: 8,
-                padding: '9px 14px',
-                marginBottom: 10,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: '#EF4444',
-                  flexShrink: 0,
-                }}
-              />
+            <div key={a.id} style={{ background: '#FEF2F2', border: '0.5px solid #FECACA', borderRadius: 8, padding: '9px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />
               <span style={{ fontSize: 12, color: '#B91C1C', flex: 1 }}>
-                <strong>{a.name}</strong> staat uit —{' '}
-                {a.lastError ?? 'verbindingsfout'}. Klik om te herstellen.
+                <strong>{a.name}</strong> staat uit — {a.lastError ?? 'verbindingsfout'}
               </span>
               <ChevronRight size={13} color="#B91C1C" />
             </div>
           ))}
 
           {/* Section header */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 10,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 500,
-                color: '#9CA3AF',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-              }}
-            >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Assistenten
             </span>
-            <span style={{ fontSize: 10, color: '#9CA3AF' }}>
-              {activeCount} actief
-            </span>
+            <span style={{ fontSize: 10, color: '#9CA3AF' }}>{activeCount} actief</span>
           </div>
 
           {/* Cards grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-              gap: 8,
-            }}
-          >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
             {displayed.map((a) => {
               const st = states.get(a.id) ?? a.status
               return (
@@ -971,100 +693,57 @@ export function AssistantDashboard({
           </div>
 
           {displayed.length === 0 && (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '32px 0',
-                color: '#9CA3AF',
-                fontSize: 13,
-              }}
-            >
-              {searchQuery
-                ? `Geen resultaten voor "${searchQuery}"`
-                : 'Nog geen assistenten'}
+            <div style={{ textAlign: 'center', padding: '32px 0', color: '#9CA3AF', fontSize: 13 }}>
+              {searchQuery ? `Geen resultaten voor "${searchQuery}"` : 'Nog geen assistenten'}
             </div>
           )}
 
           {/* Historie */}
           <div style={{ marginTop: 24 }}>
-            <p
-              style={{
-                fontSize: 10,
-                fontWeight: 500,
-                color: '#9CA3AF',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                marginBottom: 10,
-              }}
-            >
+            <p style={{ fontSize: 10, fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Historie
             </p>
-            <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>
-              Recent activiteit wordt hier getoond.
-            </p>
+            <p style={{ fontSize: 12, color: '#9CA3AF', margin: 0 }}>Recent activiteit wordt hier getoond.</p>
           </div>
         </div>
 
-        {/* Right: config panel (always visible) */}
-        <ConfigPanel
-          selectedId={selectedId}
-          assistant={selectedAssistant}
-          currentStatus={currentStatus}
-          form={configForm}
-          onFormChange={setConfigForm}
-          onToggleActive={handleToggleActive}
-          onSave={handleSave}
-          onClose={() => setSelectedId(null)}
-          isSaving={isSaving}
-        />
+        {/* Right: chat window of config panel */}
+        {selectedId === 'new' && (
+          <ConfigPanel
+            assistant={null}
+            form={configForm}
+            onFormChange={setConfigForm}
+            onToggleActive={handleToggleActive}
+            onSave={handleSave}
+            onClose={handleClose}
+            isSaving={isSaving}
+          />
+        )}
+        {selectedId !== 'new' && selectedId !== null && selectedAssistant && chatMode && (
+          <ChatWindow assistant={selectedAssistant} onClose={handleClose} />
+        )}
+        {selectedId !== 'new' && selectedId !== null && selectedAssistant && !chatMode && (
+          <ConfigPanel
+            assistant={{ ...selectedAssistant, status: (selectedStatus ?? selectedAssistant.status) as AssistantStatus }}
+            form={configForm}
+            onFormChange={setConfigForm}
+            onToggleActive={handleToggleActive}
+            onSave={handleSave}
+            onClose={handleClose}
+            isSaving={isSaving}
+          />
+        )}
       </div>
 
       {/* ── Toast ────────────────────────────────────────────────────────── */}
       {activeToast && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            background: toastIsError ? '#EF4444' : '#111827',
-            color: '#fff',
-            padding: '10px 16px',
-            borderRadius: 8,
-            fontSize: 12,
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: toastIsError ? '#EF4444' : '#111827', color: '#fff', padding: '10px 16px', borderRadius: 8, fontSize: 12, zIndex: 100, display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
           {activeToast}
-          <button
-            onClick={() => {
-              setToast(null)
-              clearError()
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255,255,255,0.7)',
-              cursor: 'pointer',
-              fontSize: 16,
-              lineHeight: 1,
-              padding: 0,
-            }}
-          >
-            ×
-          </button>
+          <button onClick={() => { setToast(null); clearError() }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
         </div>
       )}
 
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-      `}</style>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
