@@ -308,7 +308,7 @@ function ChatWindow({
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div data-testid="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -326,7 +326,7 @@ function ChatWindow({
           </div>
         ))}
         {loading && (
-          <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: '6px 10px' }}>
+          <div data-testid="chat-typing-indicator" style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: '6px 10px' }}>
             {<span key={1} style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', display: 'inline-block', animation: 'typing 1.2s infinite 0s' }} />}
             {<span key={2} style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', display: 'inline-block', animation: 'typing 1.2s infinite 0.2s' }} />}
             {<span key={3} style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', display: 'inline-block', animation: 'typing 1.2s infinite 0.4s' }} />}
@@ -339,6 +339,7 @@ function ChatWindow({
       <div style={{ padding: '10px 12px', borderTop: '0.5px solid #EAECEF', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
           <textarea
+            data-testid="chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -360,6 +361,7 @@ function ChatWindow({
             }}
           />
           <button
+            data-testid="chat-send-button"
             onClick={handleSend}
             disabled={loading || !input.trim()}
             style={{

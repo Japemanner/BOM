@@ -74,6 +74,8 @@ export function AssistantCard({
 
   return (
     <div
+      data-testid="assistant-card"
+      data-card-id={id}
       onClick={() => onClick?.(id)}
       style={{
         background: '#FFFFFF',
