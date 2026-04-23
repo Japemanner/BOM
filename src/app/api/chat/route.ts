@@ -9,7 +9,6 @@ import { decrypt } from '@/lib/crypto'
 import { callOutboundWebhook } from '@/lib/outbound-webhook'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { canDo } from '@/lib/permissions'
 
 const bodySchema = z.object({
   assistantId: z.string().uuid(),
@@ -64,8 +63,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Permissiecheck ────────────────────────────────────────────────
-    const allowed = await canDo(userId, assistant.tenantId, 'assistant', 'read')
-    if (!allowed) {
+    // Alle geauthenticeerde users mogen assistenten gebruiken (triggeren).
+    // Tenant-isolatie is voldoende beveiliging.
+    const [assistantCheck] = await db
+      .select({ tenantId: assistants.tenantId })
+      .from(assistants)
+      .where(eq(assistants.id, assistantId))
+      .limit(1)
+
+    if (!assistantCheck || assistantCheck.tenantId !== assistant.tenantId) {
       return NextResponse.json({ error: 'Geen toegang tot deze assistent' }, { status: 403 })
     }
 
