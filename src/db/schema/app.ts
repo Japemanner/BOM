@@ -26,8 +26,6 @@ export const assistantRuns = appSchema.table('assistant_runs', {
   assistantId: uuid('assistant_id')
     .notNull()
     .references(() => assistants.id, { onDelete: 'cascade' }),
-  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
   status: text('status').notNull(),  // 'pending' | 'running' | 'success' | 'failed'
   input: jsonb('input').notNull().default({}),
   output: jsonb('output').notNull().default({}),
