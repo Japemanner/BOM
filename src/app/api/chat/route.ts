@@ -24,10 +24,13 @@ const bodySchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  let step = 'init'
   let runId: string | undefined
+  let errorDetail: string | undefined
 
   try {
     // ── Auth ──────────────────────────────────────────────────────────
+    step = 'auth'
     const hdrs = await headers()
     const session = await auth.api.getSession({ headers: hdrs })
     if (!session?.user?.id) {
@@ -36,6 +39,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     // ── Body validatie ────────────────────────────────────────────────
+    step = 'parse-body'
     const rawBody: unknown = await request.json().catch(() => null)
     const parsed = bodySchema.safeParse(rawBody)
     if (!parsed.success) {
@@ -46,7 +50,8 @@ export async function POST(request: NextRequest) {
     }
     const { assistantId, message, history } = parsed.data
 
-    // ── Haal assistent op (tenant-isolatie) ──────────────────────────
+    // ── Haal assistent op ──────────────────────────────────────────
+    step = 'fetch-assistant'
     const [assistant] = await db
       .select({
         id: assistants.id,
@@ -64,13 +69,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Tenant-isolatie ──────────────────────────────────────────────
-    // Alle geauthenticeerde users mogen assistenten triggeren.
-    // We verifiëren alleen dat de assistent bij dezelfde tenant hoort.
+    step = 'tenant-check'
     if (!assistant.tenantId) {
       return NextResponse.json({ error: 'Assistent heeft geen tenant' }, { status: 500 })
     }
 
     // ── Webhook config check ─────────────────────────────────────────
+    step = 'webhook-config-check'
     if (!assistant.webhookUrl || !assistant.webhookTokenEncrypted) {
       return NextResponse.json(
         { error: 'Assistent heeft geen webhook geconfigureerd. Configureer een webhook in de instellingen.' },
@@ -79,12 +84,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Maak run-record aan voor tracking ────────────────────────────
+    step = 'insert-run'
+    // Backward-compatible: draai de migratie 0007 niet op productie,
+    // dus insert alleen de kolommen die ALTIJD bestaan.
     const [run] = await db
       .insert(assistantRuns)
       .values({
         assistantId,
-        userId,
-        tenantId: assistant.tenantId,
         status: 'running',
         input: { message, historyLength: history.length },
       })
@@ -97,7 +103,22 @@ export async function POST(request: NextRequest) {
 
     const traceId = `${assistant.tenantId}-${runId}`
 
+    // ── Update run met userId / tenantId in JSON input ─────────────────
+    step = 'update-run-meta'
+    await db
+      .update(assistantRuns)
+      .set({
+        input: {
+          message,
+          historyLength: history.length,
+          userId,
+          tenantId: assistant.tenantId,
+        },
+      })
+      .where(eq(assistantRuns.id, runId))
+
     // ── Haal namen op voor payload ────────────────────────────────────
+    step = 'fetch-names'
     let tenantName = 'Onbekend'
     try {
       const [tenant] = await db
@@ -125,21 +146,24 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Decrypt secret ────────────────────────────────────────────────
+    step = 'decrypt-webhook-secret'
     let secret: string
     try {
       secret = decrypt(assistant.webhookTokenEncrypted)
-    } catch {
+    } catch (decryptErr: unknown) {
+      errorDetail = `Decrypt failed: ${decryptErr instanceof Error ? decryptErr.message : String(decryptErr)}`
       await db
         .update(assistantRuns)
-        .set({ status: 'failed', output: { error: 'Webhook secret decryptie mislukt' } })
+        .set({ status: 'failed', output: { error: errorDetail } })
         .where(eq(assistantRuns.id, runId))
       return NextResponse.json(
-        { error: 'Webhook secret decryptie mislukt. Controleer of ENCRYPTION_KEY correct is ingesteld en het token geldig is opgeslagen.' },
+        { error: 'Webhook secret decryptie mislukt. Controleer of ENCRYPTION_KEY correct is ingesteld en het token geldig is opgeslagen.', detail: errorDetail },
         { status: 500 }
       )
     }
 
     // ── Roep N8N webhook aan ────────────────────────────────────────
+    step = 'call-outbound-webhook'
     const timestamp = new Date().toISOString()
     const result = await callOutboundWebhook(assistant.webhookUrl, secret, {
       message,
@@ -163,6 +187,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Update run met succes ────────────────────────────────────────
+    step = 'update-run-success'
     const messagesPayload = [
       ...history.map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: message },
@@ -181,19 +206,25 @@ export async function POST(request: NextRequest) {
       text: result.text,
       runId,
     })
-  } catch (error) {
-    console.error('[chat POST]', error)
-    // Als we een runId hebben, markeer als failed
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error)
+    errorDetail = errMsg
+
+    // Probeer run als failed te markeren (best effort)
     if (runId) {
       try {
         await db
           .update(assistantRuns)
-          .set({ status: 'failed', output: { error: String(error) } })
+          .set({ status: 'failed', output: { error: errMsg } })
           .where(eq(assistantRuns.id, runId))
       } catch {
         // Ignore DB errors in catch
       }
     }
-    return NextResponse.json({ error: 'Interne fout' }, { status: 500 })
+
+    return NextResponse.json(
+      { error: 'Interne fout bij stap: ' + step, detail: errorDetail },
+      { status: 500 }
+    )
   }
 }
