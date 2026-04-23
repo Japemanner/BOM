@@ -277,6 +277,7 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
   }
 
   const openEdit = (a: Assistant) => {
+    const config = (a as { config?: { canUploadFiles?: boolean } }).config ?? {}
     setForm({
       name: a.name,
       description: a.description,
@@ -287,7 +288,7 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
       webhookToken: '',
       webhookTokenEditing: false,
       chatten: false,
-      bestandenUploaden: false,
+      bestandenUploaden: config.canUploadFiles ?? false,
     })
     setRevealedToken(null)
     setShowTokenInput(false)
@@ -338,6 +339,7 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
           name: form.name,
           description: form.description,
           type: form.type,
+          config: { canUploadFiles: form.bestandenUploaden },
         }
         if (form.webhookUrl !== undefined) patchBody.webhookUrl = form.webhookUrl || null
         if (form.webhookTokenEditing && form.webhookToken) {

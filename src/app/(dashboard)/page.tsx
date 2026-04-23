@@ -15,6 +15,7 @@ interface AssistantRow {
   status: AssistantStatus
   runsToday: number
   lastError?: string
+  canUploadFiles: boolean
 }
 
 async function getMetrics(tenantId: string): Promise<MetricsData> {
@@ -76,15 +77,19 @@ async function getAssistants(tenantId: string): Promise<AssistantRow[]> {
 
   const countMap = new Map(runCounts.map((r) => [r.assistantId, Number(r.count)]))
 
-  return rows.map((a) => ({
-    id: a.id,
-    name: a.name,
-    description: a.description,
-    type: a.type,
-    status: a.status as AssistantStatus,
-    runsToday: countMap.get(a.id) ?? 0,
-    lastError: a.status === 'error' ? 'Verbindingsfout' : undefined,
-  }))
+  return rows.map((a) => {
+    const config = (a.config ?? {}) as Record<string, unknown>
+    return {
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      type: a.type,
+      status: a.status as AssistantStatus,
+      runsToday: countMap.get(a.id) ?? 0,
+      lastError: a.status === 'error' ? 'Verbindingsfout' : undefined,
+      canUploadFiles: config.canUploadFiles === true,
+    }
+  })
 }
 
 export default async function DashboardPage() {

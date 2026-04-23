@@ -71,6 +71,23 @@ export const integrations = appSchema.table('integrations', {
   lastCheckedAt: timestamp('last_checked_at'),
 })
 
+export const ragDocuments = appSchema.table('rag_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  assistantId: uuid('assistant_id')
+    .notNull()
+    .references(() => assistants.id, { onDelete: 'cascade' }),
+  filename: text('filename').notNull(),
+  s3Key: text('s3_key').notNull(),
+  status: text('status').notNull().default('uploaded'),  // 'uploaded' | 'processing' | 'indexed' | 'failed'
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  processedAt: timestamp('processed_at'),
+  errorMessage: text('error_message'),
+})
+
 export const webhookTokens = appSchema.table('webhook_tokens', {
   id: uuid('id').defaultRandom().primaryKey(),
   tenantId: uuid('tenant_id')

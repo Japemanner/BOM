@@ -6,7 +6,7 @@ import { users } from '@/db/schema/auth'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
-import { callOutboundWebhook } from '@/lib/outbound-webhook'
+import { sendOutboundWebhook } from '@/lib/outbound-webhook'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 
@@ -83,16 +83,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Maak run-record aan voor tracking ────────────────────────────
+    // ── Maak run-record aan in één keer (async pattern) ─────────────
     step = 'insert-run'
-    // Backward-compatible: draai de migratie 0007 niet op productie,
-    // dus insert alleen de kolommen die ALTIJD bestaan.
     const [run] = await db
       .insert(assistantRuns)
       .values({
         assistantId,
         status: 'running',
-        input: { message, historyLength: history.length },
+        input: { message, history, historyLength: history.length, userId, tenantId: assistant.tenantId },
       })
       .returning({ id: assistantRuns.id })
 
@@ -102,20 +100,6 @@ export async function POST(request: NextRequest) {
     }
 
     const traceId = `${assistant.tenantId}-${runId}`
-
-    // ── Update run met userId / tenantId in JSON input ─────────────────
-    step = 'update-run-meta'
-    await db
-      .update(assistantRuns)
-      .set({
-        input: {
-          message,
-          historyLength: history.length,
-          userId,
-          tenantId: assistant.tenantId,
-        },
-      })
-      .where(eq(assistantRuns.id, runId))
 
     // ── Haal namen op voor payload ────────────────────────────────────
     step = 'fetch-names'
@@ -162,50 +146,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Roep N8N webhook aan ────────────────────────────────────────
-    step = 'call-outbound-webhook'
+    // ── Stuur bericht naar N8N (fire-and-forget) ──────────────────────
+    step = 'send-outbound-webhook'
     const timestamp = new Date().toISOString()
-    const result = await callOutboundWebhook(assistant.webhookUrl, secret, {
-      message,
-      history,
-      assistantId,
-      assistantName: assistant.name,
-      tenantId: assistant.tenantId,
-      tenantName,
-      userId,
-      userName,
-      traceId,
-      timestamp,
-    })
-
-    if (!result.ok) {
+    try {
+      await sendOutboundWebhook(assistant.webhookUrl, secret, {
+        message,
+        history,
+        assistantId,
+        assistantName: assistant.name,
+        tenantId: assistant.tenantId,
+        tenantName,
+        userId,
+        userName,
+        traceId,
+        timestamp,
+      })
+    } catch (sendErr: unknown) {
+      const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr)
       await db
         .update(assistantRuns)
-        .set({ status: 'failed', output: { error: result.error } })
+        .set({ status: 'failed', output: { error: errMsg } })
         .where(eq(assistantRuns.id, runId))
-      return NextResponse.json({ error: `N8N webhook mislukt: ${result.error}` }, { status: 502 })
+      return NextResponse.json({ error: `N8N webhook versturen mislukt: ${errMsg}` }, { status: 502 })
     }
 
-    // ── Update run met succes ────────────────────────────────────────
-    step = 'update-run-success'
-    const messagesPayload = [
-      ...history.map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user', content: message },
-      { role: 'assistant', content: result.text },
-    ]
-    await db
-      .update(assistantRuns)
-      .set({
-        status: 'success',
-        output: { text: result.text, messages: messagesPayload },
-      })
-      .where(eq(assistantRuns.id, runId))
-
-    return NextResponse.json({
-      ok: true,
-      text: result.text,
-      runId,
-    })
+    // ── Return 202 Accepted ─ client gaat pollen ─────────────────────
+    return NextResponse.json({ runId, status: 'running' }, { status: 202 })
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error)
     errorDetail = errMsg

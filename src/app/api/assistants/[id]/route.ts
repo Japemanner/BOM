@@ -19,6 +19,7 @@ const patchSchema = z.object({
   type: z.string().min(1).optional(),
   webhookUrl: z.string().url().nullable().optional(),
   webhookToken: z.string().min(1).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Geen velden om te updaten' })
 
 export async function GET(
@@ -68,7 +69,7 @@ export async function PATCH(
       )
     }
 
-    const { webhookToken, webhookUrl, ...rest } = parsed.data
+    const { webhookToken, webhookUrl, config: newConfig, ...rest } = parsed.data
 
     const hasWebhookChange = webhookUrl !== undefined || webhookToken
     const requiredPermission = hasWebhookChange ? 'webhooks' : 'assistants'
@@ -84,6 +85,7 @@ export async function PATCH(
     }
     if (webhookUrl !== undefined) updateData.webhookUrl = webhookUrl
     if (webhookToken) updateData.webhookTokenEncrypted = encrypt(webhookToken)
+    if (newConfig) updateData.config = newConfig
 
     const [updated] = await db
       .update(assistants)

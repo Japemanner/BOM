@@ -10,6 +10,7 @@ import {
   Loader2,
   Send,
   Bot,
+  Paperclip,
 } from 'lucide-react'
 import { AssistantCard } from './assistant-card'
 import { useOptimisticToggle } from '@/hooks/use-optimistic-toggle'
@@ -30,6 +31,7 @@ interface Assistant {
   runsToday: number
   lastError?: string
   tags?: string[]
+  canUploadFiles?: boolean
 }
 
 interface ConfigForm {
@@ -196,12 +198,23 @@ function ChatWindow({
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Scroll naar onder bij nieuwe berichten
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Cleanup poll timer bij unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+  }, [])
 
   let msgCounter = 0
   const genMsgId = () => {
@@ -213,6 +226,13 @@ function ChatWindow({
     if (!input.trim()) return
     const text = input.trim()
     setInput('')
+
+    // Cancel lopende poll
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+    setPendingRunId(null)
 
     const userMsg: ChatMessage = {
       id: genMsgId(),
@@ -247,19 +267,30 @@ function ChatWindow({
             timestamp: new Date().toISOString(),
           },
         ])
+        setLoading(false)
         return
       }
 
       const data = await res.json()
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: genMsgId(),
-          role: 'assistant',
-          content: typeof data.text === 'string' ? data.text : 'Geen antwoord ontvangen.',
-          timestamp: new Date().toISOString(),
-        },
-      ])
+      const runId = typeof data.runId === 'string' ? data.runId : undefined
+
+      if (!runId) {
+        // Fallback voor oud sync-patroon (backward-compat)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: genMsgId(),
+            role: 'assistant',
+            content: typeof data.text === 'string' ? data.text : 'Geen antwoord ontvangen.',
+            timestamp: new Date().toISOString(),
+          },
+        ])
+        setLoading(false)
+        return
+      }
+
+      // Async pattern: start polling
+      setPendingRunId(runId)
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -270,9 +301,171 @@ function ChatWindow({
           timestamp: new Date().toISOString(),
         },
       ])
-    } finally {
       setLoading(false)
     }
+  }
+
+  // ── Poll logica ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!pendingRunId) return
+
+    const startTime = Date.now()
+    const MAX_POLL_MS = 5 * 60 * 1000 // 5 min timeout
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/chat/status/${pendingRunId}`)
+        if (!res.ok) {
+          // Retry bij 500s, stop bij 404
+          if (res.status === 404) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: genMsgId(),
+                role: 'assistant',
+                content: '⚠️ Run niet gevonden.',
+                timestamp: new Date().toISOString(),
+              },
+            ])
+            setLoading(false)
+            setPendingRunId(null)
+            return
+          }
+          throw new Error(`HTTP ${res.status}`)
+        }
+
+        const data = await res.json()
+
+        if (data.status === 'success') {
+          const replyText = typeof data.text === 'string' ? data.text : 'Geen antwoord ontvangen.'
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: genMsgId(),
+              role: 'assistant',
+              content: replyText,
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          setLoading(false)
+          setPendingRunId(null)
+          return
+        }
+
+        if (data.status === 'failed') {
+          const errText = typeof data.error === 'string' ? data.error : 'Onbekende fout'
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: genMsgId(),
+              role: 'assistant',
+              content: `⚠️ ${errText}`,
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          setLoading(false)
+          setPendingRunId(null)
+          return
+        }
+
+        // running of pending → poll door
+        if (Date.now() - startTime > MAX_POLL_MS) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: genMsgId(),
+              role: 'assistant',
+              content: '⚠️ Time-out: geen antwoord ontvangen binnen 5 minuten.',
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          setLoading(false)
+          setPendingRunId(null)
+          return
+        }
+
+        pollTimerRef.current = setTimeout(poll, 2000)
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: genMsgId(),
+            role: 'assistant',
+            content: `⚠️ Poll-fout: ${err instanceof Error ? err.message : String(err)}`,
+            timestamp: new Date().toISOString(),
+          },
+        ])
+        setLoading(false)
+        setPendingRunId(null)
+      }
+    }
+
+    pollTimerRef.current = setTimeout(poll, 1500)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRunId])
+
+  const handleUpload = async (file: File) => {
+    if (!assistant.canUploadFiles) {
+      setUploadStatus('error')
+      setTimeout(() => setUploadStatus('idle'), 3000)
+      return
+    }
+
+    setUploadStatus('uploading')
+
+    try {
+      // 1. Vraag presigned URL op
+      const res = await fetch('/api/rag/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assistantId: assistant.id,
+          filename: file.name,
+          contentType: file.type,
+        }),
+      })
+
+      if (!res.ok) throw new Error('Upload URL ophalen mislukt')
+
+      const { uploadUrl, documentId } = await res.json()
+
+      // 2. Upload direct naar S3
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      })
+      if (!uploadRes.ok) throw new Error('Upload naar S3 mislukt')
+
+      // 3. Bevestig upload → triggereer N8N
+      const confirmRes = await fetch('/api/rag/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId }),
+      })
+      if (!confirmRes.ok) throw new Error('Confirmatie mislukt')
+
+      setUploadStatus('done')
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: genMsgId(),
+          role: 'assistant',
+          content: `📎 Bestand "${file.name}" geüpload. De documenten worden nu verwerkt voor RAG.`,
+          timestamp: new Date().toISOString(),
+        },
+      ])
+      setTimeout(() => setUploadStatus('idle'), 3000)
+    } catch (err) {
+      setUploadStatus('error')
+      setTimeout(() => setUploadStatus('idle'), 3000)
+    }
+  }
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) handleUpload(file)
+    e.target.value = '' // reset voor herhaalde uploads
   }
 
   return (
@@ -337,7 +530,34 @@ function ChatWindow({
 
       {/* Input */}
       <div style={{ padding: '10px 12px', borderTop: '0.5px solid #EAECEF', flexShrink: 0 }}>
+        {uploadStatus === 'error' && (
+          <p style={{ fontSize: 11, color: '#EF4444', margin: '0 0 6px' }}>Upload mislukt. Probeer opnieuw.</p>
+        )}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          {assistant.canUploadFiles && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={onFileChange}
+                accept=".pdf,.docx,.txt"
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadStatus === 'uploading'}
+                style={{
+                  width: 32, height: 32, borderRadius: 7,
+                  border: 'none', background: '#F1F5F9', color: uploadStatus === 'uploading' ? '#CBD5E1' : '#64748B',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: uploadStatus === 'uploading' ? 'not-allowed' : 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <Paperclip size={14} />
+              </button>
+            </>
+          )}
           <textarea
             data-testid="chat-input"
             value={input}

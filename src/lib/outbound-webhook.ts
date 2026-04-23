@@ -61,15 +61,15 @@ export interface OutboundWebhookError {
 }
 
 /**
- * Roep een N8N webhook aan met request-response pattern.
- * BOM stuurt bericht + context, wacht op AI-antwoord in HTTP body.
- * Timeout: 30 seconden (N8N workflows kunnen lang lopen bij LLM calls).
+ * Fire-and-forget variant: stuur bericht naar N8N zonder op antwoord te wachten.
+ * N8N belt later terug via POST /api/chat/callback.
+ * Timeout: 10s (N8N moet de request meteen acken, niet wachten op flow resultaat).
  */
-export async function callOutboundWebhook(
+export async function sendOutboundWebhook(
   webhookUrl: string,
   secret: string,
   payload: OutboundWebhookPayload
-): Promise<OutboundWebhookResult | OutboundWebhookError> {
+): Promise<void> {
   const jwt = await createOutboundJwt(secret, {
     runId: payload.traceId.slice(37),
     assistantId: payload.assistantId,
@@ -78,7 +78,7 @@ export async function callOutboundWebhook(
   })
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 30_000)
+  const timeoutId = setTimeout(() => controller.abort(), 10_000)
 
   try {
     const res = await fetch(webhookUrl, {
@@ -93,28 +93,62 @@ export async function callOutboundWebhook(
     clearTimeout(timeoutId)
 
     if (!res.ok) {
-      const bodyText = await res.text().catch(() => '')
-      return { ok: false, error: `N8N webhook HTTP ${res.status}: ${bodyText}`, status: res.status }
+      throw new Error(`N8N webhook HTTP ${res.status}`)
     }
-
-    const body: unknown = await res.json().catch(() => null)
-    if (!body || typeof body !== 'object') {
-      return { ok: false, error: 'N8N webhook retourneerde geen geldige JSON' }
-    }
-
-    const data = body as Record<string, unknown>
-    const text = typeof data.text === 'string' ? data.text : typeof data.response === 'string' ? data.response : ''
-
-    if (!text) {
-      return { ok: false, error: 'N8N webhook retourneerde geen "text" of "response" veld' }
-    }
-
-    return { ok: true, text, meta: data.meta as Record<string, unknown> | undefined }
+    // Alles OK — we negeren de body; N8N belt later terug.
   } catch (err) {
     clearTimeout(timeoutId)
-    if (err instanceof Error && err.name === 'AbortError') {
-      return { ok: false, error: 'N8N webhook timeout na 30s' }
+    throw err instanceof Error ? err : new Error(String(err))
+  }
+}
+
+export interface RagWebhookPayload {
+  documentId: string
+  s3Key: string
+  filename: string
+  tenantId: string
+  assistantId: string
+  userId: string
+  timestamp: string
+}
+
+/**
+ * Roep een N8N webhook aan voor RAG document upload.
+ * BOM stuurt metadata, N8N downloadt file van S3 en vectoriseert.
+ * Timeout: 10s (fire-and-forget).
+ */
+export async function sendRagWebhook(
+  webhookUrl: string,
+  secret: string,
+  payload: RagWebhookPayload
+): Promise<void> {
+  const jwt = await createOutboundJwt(secret, {
+    runId: payload.documentId,
+    assistantId: payload.assistantId,
+    assistantName: 'rag-processor',
+    tenantId: payload.tenantId,
+  })
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10_000)
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${jwt}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+
+    if (!res.ok) {
+      throw new Error(`N8N webhook HTTP ${res.status}`)
     }
-    return { ok: false, error: `N8N webhook request mislukt: ${err instanceof Error ? err.message : String(err)}` }
+  } catch (err) {
+    clearTimeout(timeoutId)
+    throw err instanceof Error ? err : new Error(String(err))
   }
 }
