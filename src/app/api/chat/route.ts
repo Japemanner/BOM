@@ -13,7 +13,6 @@ import { headers } from 'next/headers'
 const bodySchema = z.object({
   assistantId: z.string().uuid(),
   message: z.string().min(1).max(4000),
-  /** Optionele berichtengeschiedenis als context */
   history: z
     .array(
       z.object({
@@ -25,6 +24,8 @@ const bodySchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  let runId: string | undefined
+
   try {
     // ── Auth ──────────────────────────────────────────────────────────
     const hdrs = await headers()
@@ -62,20 +63,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
     }
 
-    // ── Permissiecheck ────────────────────────────────────────────────
-    // Alle geauthenticeerde users mogen assistenten gebruiken (triggeren).
-    // Tenant-isolatie is voldoende beveiliging.
-    const [assistantCheck] = await db
-      .select({ tenantId: assistants.tenantId })
-      .from(assistants)
-      .where(eq(assistants.id, assistantId))
-      .limit(1)
-
-    if (!assistantCheck || assistantCheck.tenantId !== assistant.tenantId) {
-      return NextResponse.json({ error: 'Geen toegang tot deze assistent' }, { status: 403 })
+    // ── Tenant-isolatie ──────────────────────────────────────────────
+    // Alle geauthenticeerde users mogen assistenten triggeren.
+    // We verifiëren alleen dat de assistent bij dezelfde tenant hoort.
+    if (!assistant.tenantId) {
+      return NextResponse.json({ error: 'Assistent heeft geen tenant' }, { status: 500 })
     }
 
-    // ─--Webhook config check ──────────────────────────────────────────
+    // ── Webhook config check ─────────────────────────────────────────
     if (!assistant.webhookUrl || !assistant.webhookTokenEncrypted) {
       return NextResponse.json(
         { error: 'Assistent heeft geen webhook geconfigureerd. Configureer een webhook in de instellingen.' },
@@ -83,7 +78,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Maak run-record aan voor tracking ───────────────────────────────
+    // ── Maak run-record aan voor tracking ────────────────────────────
     const [run] = await db
       .insert(assistantRuns)
       .values({
@@ -95,10 +90,14 @@ export async function POST(request: NextRequest) {
       })
       .returning({ id: assistantRuns.id })
 
-    const runId = run?.id ?? `tmp-${Date.now()}`
+    runId = run?.id
+    if (!runId) {
+      return NextResponse.json({ error: 'Fout bij aanmaken run' }, { status: 500 })
+    }
+
     const traceId = `${assistant.tenantId}-${runId}`
 
-    // ── Haal tenant naam + user naam op ──────────────────────────────
+    // ── Haal namen op voor payload ────────────────────────────────────
     let tenantName = 'Onbekend'
     try {
       const [tenant] = await db
@@ -108,7 +107,7 @@ export async function POST(request: NextRequest) {
         .limit(1)
       if (tenant?.name) tenantName = tenant.name
     } catch {
-      // Tenant naam niet kritisch; val terug op 'Onbekend'
+      // Tenant naam niet kritisch
     }
 
     let userName = session.user?.name ?? 'Onbekend'
@@ -121,7 +120,7 @@ export async function POST(request: NextRequest) {
           .limit(1)
         if (dbUser?.name) userName = dbUser.name
       } catch {
-        // Naam ophalen mislukt; fallback 'Onbekend' is acceptabel
+        // Naam ophalen mislukt
       }
     }
 
@@ -129,15 +128,13 @@ export async function POST(request: NextRequest) {
     let secret: string
     try {
       secret = decrypt(assistant.webhookTokenEncrypted)
-      console.log(`[chat] secret decrypted (length=${secret.length})`)
-    } catch (decryptErr) {
-      console.error('[chat] decrypt failed:', decryptErr)
+    } catch {
       await db
         .update(assistantRuns)
         .set({ status: 'failed', output: { error: 'Webhook secret decryptie mislukt' } })
         .where(eq(assistantRuns.id, runId))
       return NextResponse.json(
-        { error: 'Webhook secret decryptie mislukt. Controleer dat het token correct is opgeslagen in de instellingen.' },
+        { error: 'Webhook secret decryptie mislukt. Controleer of ENCRYPTION_KEY correct is ingesteld en het token geldig is opgeslagen.' },
         { status: 500 }
       )
     }
@@ -186,6 +183,17 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('[chat POST]', error)
+    // Als we een runId hebben, markeer als failed
+    if (runId) {
+      try {
+        await db
+          .update(assistantRuns)
+          .set({ status: 'failed', output: { error: String(error) } })
+          .where(eq(assistantRuns.id, runId))
+      } catch {
+        // Ignore DB errors in catch
+      }
+    }
     return NextResponse.json({ error: 'Interne fout' }, { status: 500 })
   }
 }
