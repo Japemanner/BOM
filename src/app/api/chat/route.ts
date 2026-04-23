@@ -123,12 +123,17 @@ export async function POST(request: NextRequest) {
     let secret: string
     try {
       secret = decrypt(assistant.webhookTokenEncrypted)
-    } catch {
+      console.log(`[chat] secret decrypted (length=${secret.length})`)
+    } catch (decryptErr) {
+      console.error('[chat] decrypt failed:', decryptErr)
       await db
         .update(assistantRuns)
         .set({ status: 'failed', output: { error: 'Webhook secret decryptie mislukt' } })
         .where(eq(assistantRuns.id, runId))
-      return NextResponse.json({ error: 'Webhook secret decryptie mislukt' }, { status: 500 })
+      return NextResponse.json(
+        { error: 'Webhook secret decryptie mislukt. Controleer dat het token correct is opgeslagen in de instellingen.' },
+        { status: 500 }
+      )
     }
 
     // ── Roep N8N webhook aan ────────────────────────────────────────
