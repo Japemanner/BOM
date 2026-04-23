@@ -9,6 +9,7 @@ import {
   Settings,
   Plug,
   Zap,
+  Shield,
 } from 'lucide-react'
 
 const TEAL = '#1D9E75'
@@ -28,6 +29,7 @@ const MANAGE_ITEMS: NavItem[] = [
   { href: '/analytics',    icon: BarChart2,   label: 'Analyse' },
   { href: '/settings',     icon: Settings,    label: 'Instellingen' },
   { href: '/integrations', icon: Plug,        label: 'Integraties' },
+  { href: '/admin',        icon: Shield,      label: 'Admin' },
 ]
 
 interface SidebarProps {

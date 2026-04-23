@@ -1,30 +1,21 @@
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
 import { eq } from 'drizzle-orm'
-import { assistants, webhookTokens } from '@/db/schema/app'
-import { tenants } from '@/db/schema/iam'
+import { assistants } from '@/db/schema/app'
 import { SettingsTabs } from '@/components/settings/settings-tabs'
 import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
 
 async function getData(tenantId: string) {
   try {
-    const [allAssistants, allTenants, allInboundTokens] = await Promise.all([
-      db.select().from(assistants)
-        .where(eq(assistants.tenantId, tenantId))
-        .orderBy(assistants.createdAt),
-      db.select().from(tenants).orderBy(tenants.name),
-      db.select({
-        id: webhookTokens.id,
-        name: webhookTokens.name,
-        assistantId: webhookTokens.assistantId,
-        createdAt: webhookTokens.createdAt,
-        lastUsedAt: webhookTokens.lastUsedAt,
-      }).from(webhookTokens).where(eq(webhookTokens.tenantId, tenantId)),
-    ])
-    return { allAssistants, allTenants, allInboundTokens }
+    const allAssistants = await db
+      .select()
+      .from(assistants)
+      .where(eq(assistants.tenantId, tenantId))
+      .orderBy(assistants.createdAt)
+    return { allAssistants }
   } catch {
-    return { allAssistants: [], allTenants: [], allInboundTokens: [] }
+    return { allAssistants: [] }
   }
 }
 
@@ -70,35 +61,23 @@ export default async function SettingsPage() {
       case 'no_tenant':
         return <ErrorPage
           title="Geen organisatie gekoppeld"
-          message="Je account is nog niet gekoppeld aan een organisatie. Neem contact op met een beheerder of log opnieuw in."
+          message="Je account is nog niet gekoppeld aan een organisatie."
         />
       case 'db_error':
         return <ErrorPage
           title="Tijdelijke fout"
-          message="Er is een probleem met de databaseverbinding. Probeer het later opnieuw."
+          message="Er is een probleem met de databaseverbinding."
         />
     }
   }
 
-  const { allAssistants, allTenants, allInboundTokens } = await getData(result.tenantId)
+  const { allAssistants } = await getData(result.tenantId)
 
   const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => ({
     ...a,
     status: a.status as AssistantStatus,
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
-  }))
-
-  const tenantsData = allTenants.map((t) => ({
-    ...t,
-    createdAt: t.createdAt.toISOString(),
-  }))
-
-  const inboundTokensData = allInboundTokens.map((t) => ({
-    ...t,
-    assistantId: t.assistantId ?? null,
-    createdAt: t.createdAt.toISOString(),
-    lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
   }))
 
   return (
@@ -121,7 +100,7 @@ export default async function SettingsPage() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
         <div style={{ maxWidth: 840 }}>
-          <SettingsTabs assistants={assistantsData} tenants={tenantsData} inboundTokens={inboundTokensData} />
+          <SettingsTabs assistants={assistantsData} />
         </div>
       </div>
     </div>

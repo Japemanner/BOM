@@ -1,46 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { AdminAssistants } from './admin-assistants'
 import { AssistentenBeheer } from './assistenten-beheer'
-import type { AssistantStatus, WebhookToken } from '@/types'
+import type { AssistantStatus } from '@/types'
 
 const TEAL = '#1D9E75'
 
-interface Assistant {
-  id: string
-  name: string
-  description: string
-  type: string
-  status: AssistantStatus
-  tenantId: string
-  createdAt: string
-  updatedAt: string
-  webhookUrl: string | null
-  webhookTokenEncrypted?: string | null
-}
-
-interface Tenant {
-  id: string
-  name: string
-  slug: string
-  plan: string
-  createdAt: string
-}
-
 interface SettingsTabsProps {
-  assistants: Assistant[]
-  tenants: Tenant[]
-  inboundTokens: WebhookToken[]
+  assistants: { id: string; name: string; description: string; type: string; status: string; tenantId: string; createdAt: string; updatedAt: string; webhookUrl: string | null }[]
 }
 
 const TABS = [
   { id: 'algemeen',    label: 'Algemeen' },
   { id: 'assistenten', label: 'Assistenten beheer' },
-  { id: 'admin',       label: 'Admin' },
 ]
 
-export function SettingsTabs({ assistants, tenants, inboundTokens }: SettingsTabsProps) {
+export function SettingsTabs({ assistants }: SettingsTabsProps) {
   const [active, setActive] = useState('assistenten')
 
   const dbAssistants = assistants.map((a) => ({
@@ -48,7 +23,7 @@ export function SettingsTabs({ assistants, tenants, inboundTokens }: SettingsTab
     name: a.name,
     description: a.description,
     type: a.type,
-    status: a.status,
+    status: a.status as AssistantStatus,
     runsToday: 0,
     source: 'db' as const,
     tenantId: a.tenantId,
@@ -56,11 +31,7 @@ export function SettingsTabs({ assistants, tenants, inboundTokens }: SettingsTab
 
   return (
     <div>
-      <div style={{
-        display: 'flex',
-        borderBottom: '0.5px solid #EAECEF',
-        marginBottom: 24,
-      }}>
+      <div style={{ display: 'flex', borderBottom: '0.5px solid #EAECEF', marginBottom: 24 }}>
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -101,30 +72,13 @@ export function SettingsTabs({ assistants, tenants, inboundTokens }: SettingsTab
       {active === 'assistenten' && (
         <AssistentenBeheer dbAssistants={dbAssistants} />
       )}
-
-      {active === 'admin' && (
-        <AdminAssistants assistants={assistants} tenants={tenants} inboundTokens={inboundTokens} />
-      )}
     </div>
   )
 }
 
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description: string
-  children: React.ReactNode
-}) {
+function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div style={{
-      background: '#fff',
-      border: '0.5px solid #EAECEF',
-      borderRadius: 12,
-      padding: 20,
-    }}>
+    <div style={{ background: '#fff', border: '0.5px solid #EAECEF', borderRadius: 12, padding: 20 }}>
       <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: '0 0 2px' }}>{title}</p>
       <p style={{ fontSize: 12, color: '#9CA3AF', margin: '0 0 16px' }}>{description}</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
