@@ -11,6 +11,7 @@ import {
   Send,
   Bot,
   Paperclip,
+  Check,
 } from 'lucide-react'
 import { AssistantCard } from './assistant-card'
 import { useOptimisticToggle } from '@/hooks/use-optimistic-toggle'
@@ -198,21 +199,25 @@ function ChatWindow({
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'indexed' | 'error'>('idle')
   const [pendingRunId, setPendingRunId] = useState<string | null>(null)
+  const [pendingDocumentId, setPendingDocumentId] = useState<string | null>(null)
+  const [docError, setDocError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const docPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Scroll naar onder bij nieuwe berichten
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Cleanup poll timer bij unmount
+  // Cleanup poll timers bij unmount
   useEffect(() => {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      if (docPollTimerRef.current) clearTimeout(docPollTimerRef.current)
     }
   }, [])
 
@@ -407,11 +412,13 @@ function ChatWindow({
   const handleUpload = async (file: File) => {
     if (!assistant.canUploadFiles) {
       setUploadStatus('error')
-      setTimeout(() => setUploadStatus('idle'), 3000)
+      setDocError('Upload niet toegestaan voor deze assistent')
+      setTimeout(() => { setUploadStatus('idle'); setDocError(null) }, 3000)
       return
     }
 
     setUploadStatus('uploading')
+    setDocError(null)
 
     try {
       // 1. Vraag presigned URL op
@@ -428,6 +435,7 @@ function ChatWindow({
       if (!res.ok) throw new Error('Upload URL ophalen mislukt')
 
       const { uploadUrl, documentId } = await res.json()
+      if (!documentId || !uploadUrl) throw new Error('Ongeldige response van upload-url')
 
       // 2. Upload direct naar S3
       const uploadRes = await fetch(uploadUrl, {
@@ -435,7 +443,7 @@ function ChatWindow({
         body: file,
         headers: { 'Content-Type': file.type },
       })
-      if (!uploadRes.ok) throw new Error('Upload naar S3 mislukt')
+      if (!uploadRes.ok) throw new Error(`Upload naar S3 mislukt: HTTP ${uploadRes.status}`)
 
       // 3. Bevestig upload → triggereer N8N
       const confirmRes = await fetch('/api/rag/confirm', {
@@ -443,24 +451,139 @@ function ChatWindow({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentId }),
       })
-      if (!confirmRes.ok) throw new Error('Confirmatie mislukt')
+      if (!confirmRes.ok) {
+        const errData = await confirmRes.json().catch(() => null)
+        throw new Error(errData?.error ?? `Confirmatie mislukt: HTTP ${confirmRes.status}`)
+      }
 
-      setUploadStatus('done')
+      // 4. Start document polling
+      setUploadStatus('processing')
+      setPendingDocumentId(documentId)
       setMessages((prev) => [
         ...prev,
         {
           id: genMsgId(),
           role: 'assistant',
-          content: `📎 Bestand "${file.name}" geüpload. De documenten worden nu verwerkt voor RAG.`,
+          content: `📎 Bestand "${file.name}" geüpload. Documenten worden verwerkt voor RAG...`,
           timestamp: new Date().toISOString(),
         },
       ])
-      setTimeout(() => setUploadStatus('idle'), 3000)
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
       setUploadStatus('error')
-      setTimeout(() => setUploadStatus('idle'), 3000)
+      setDocError(errMsg)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: genMsgId(),
+          role: 'assistant',
+          content: `⚠️ Upload mislukt: ${errMsg}`,
+          timestamp: new Date().toISOString(),
+        },
+      ])
+      setTimeout(() => { setUploadStatus('idle'); setDocError(null) }, 5000)
     }
   }
+
+  // ── Document status poll logica ───────────────────────────────────────────
+  useEffect(() => {
+    if (!pendingDocumentId) return
+
+    const startTime = Date.now()
+    const MAX_DOC_POLL_MS = 5 * 60 * 1000 // 5 min timeout
+
+    const pollDoc = async () => {
+      try {
+        const res = await fetch(`/api/rag/status/${pendingDocumentId}`)
+        if (!res.ok) {
+          if (res.status === 404) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: genMsgId(),
+                role: 'assistant',
+                content: '⚠️ Document niet gevonden.',
+                timestamp: new Date().toISOString(),
+              },
+            ])
+            setUploadStatus('idle')
+            setPendingDocumentId(null)
+            return
+          }
+          throw new Error(`HTTP ${res.status}`)
+        }
+
+        const data = await res.json()
+
+        if (data.status === 'indexed') {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: genMsgId(),
+              role: 'assistant',
+              content: `📎 Document "${data.filename}" is klaar en kan nu worden gebruikt in gesprekken.`,
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          setUploadStatus('indexed')
+          setTimeout(() => setUploadStatus('idle'), 4000)
+          setPendingDocumentId(null)
+          return
+        }
+
+        if (data.status === 'failed') {
+          const errText = typeof data.errorMessage === 'string' ? data.errorMessage : 'Verwerking mislukt'
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: genMsgId(),
+              role: 'assistant',
+              content: `⚠️ Document verwerking mislukt: ${errText}`,
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          setUploadStatus('error')
+          setDocError(errText)
+          setTimeout(() => { setUploadStatus('idle'); setDocError(null) }, 5000)
+          setPendingDocumentId(null)
+          return
+        }
+
+        // uploaded, processing → poll door
+        if (Date.now() - startTime > MAX_DOC_POLL_MS) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: genMsgId(),
+              role: 'assistant',
+              content: '⚠️ Time-out: document verwerking duurde langer dan 5 minuten.',
+              timestamp: new Date().toISOString(),
+            },
+          ])
+          setUploadStatus('error')
+          setPendingDocumentId(null)
+          return
+        }
+
+        docPollTimerRef.current = setTimeout(pollDoc, 2500)
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: genMsgId(),
+            role: 'assistant',
+            content: `⚠️ Poll-fout: ${err instanceof Error ? err.message : String(err)}`,
+            timestamp: new Date().toISOString(),
+          },
+        ])
+        setUploadStatus('error')
+        setPendingDocumentId(null)
+      }
+    }
+
+    docPollTimerRef.current = setTimeout(pollDoc, 2000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDocumentId])
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -530,8 +653,11 @@ function ChatWindow({
 
       {/* Input */}
       <div style={{ padding: '10px 12px', borderTop: '0.5px solid #EAECEF', flexShrink: 0 }}>
-        {uploadStatus === 'error' && (
-          <p style={{ fontSize: 11, color: '#EF4444', margin: '0 0 6px' }}>Upload mislukt. Probeer opnieuw.</p>
+        {uploadStatus === 'error' && docError && (
+          <p style={{ fontSize: 11, color: '#EF4444', margin: '0 0 6px' }}>{docError}</p>
+        )}
+        {uploadStatus === 'processing' && (
+          <p style={{ fontSize: 11, color: '#64748B', margin: '0 0 6px' }}>Documenten worden verwerkt voor RAG...</p>
         )}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
           {assistant.canUploadFiles && (
@@ -545,16 +671,26 @@ function ChatWindow({
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploadStatus === 'uploading'}
+                disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
                 style={{
                   width: 32, height: 32, borderRadius: 7,
-                  border: 'none', background: '#F1F5F9', color: uploadStatus === 'uploading' ? '#CBD5E1' : '#64748B',
+                  border: 'none', background: '#F1F5F9',
+                  color: (uploadStatus === 'uploading' || uploadStatus === 'processing') ? '#CBD5E1'
+                    : uploadStatus === 'indexed' ? '#22C55E'
+                    : uploadStatus === 'error' ? '#EF4444'
+                    : '#64748B',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: uploadStatus === 'uploading' ? 'not-allowed' : 'pointer',
+                  cursor: (uploadStatus === 'uploading' || uploadStatus === 'processing') ? 'not-allowed' : 'pointer',
                   flexShrink: 0,
                 }}
               >
-                <Paperclip size={14} />
+                {uploadStatus === 'uploading' || uploadStatus === 'processing' ? (
+                  <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                ) : uploadStatus === 'indexed' ? (
+                  <Check size={14} />
+                ) : (
+                  <Paperclip size={14} />
+                )}
               </button>
             </>
           )}

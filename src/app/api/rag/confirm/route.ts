@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { sendRagWebhook } from '@/lib/outbound-webhook'
 import { decrypt } from '@/lib/crypto'
+import { deleteS3Object } from '@/lib/s3'
 
 const bodySchema = z.object({
   documentId: z.string().uuid(),
@@ -85,25 +86,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Webhook secret decryptie mislukt' }, { status: 500 })
     }
 
+    // ── Triggereer N8N RAG webhook (fire-and-forget) ──────────────
+    step = 'trigger-n8n'
+    const input = doc.runInput as { uploadedBy?: string } ?? {}
+    try {
+      await sendRagWebhook(assistant.webhookUrl, secret, {
+        documentId,
+        s3Key: doc.s3Key,
+        filename: doc.filename,
+        tenantId: doc.tenantId,
+        assistantId: doc.assistantId,
+        userId: input.uploadedBy ?? 'unknown',
+        timestamp: new Date().toISOString(),
+      })
+    } catch (sendErr: unknown) {
+      const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr)
+      // Cleanup: markeer als failed en probeer S3 object te verwijderen
+      await db
+        .update(ragDocuments)
+        .set({ status: 'failed', errorMessage: `N8N trigger mislukt: ${errMsg}` })
+        .where(eq(ragDocuments.id, documentId))
+      await deleteS3Object(doc.s3Key)
+      return NextResponse.json(
+        { error: `N8N RAG webhook trigger mislukt: ${errMsg}` },
+        { status: 502 }
+      )
+    }
+
     // ── Update status naar processing ────────────────────────────────
     step = 'update-status'
     await db
       .update(ragDocuments)
       .set({ status: 'processing' })
       .where(eq(ragDocuments.id, documentId))
-
-    // ── Triggereer N8N RAG webhook (fire-and-forget) ──────────────
-    step = 'trigger-n8n'
-    const input = doc.runInput as { uploadedBy?: string } ?? {}
-    await sendRagWebhook(assistant.webhookUrl, secret, {
-      documentId,
-      s3Key: doc.s3Key,
-      filename: doc.filename,
-      tenantId: doc.tenantId,
-      assistantId: doc.assistantId,
-      userId: input.uploadedBy ?? 'unknown',
-      timestamp: new Date().toISOString(),
-    })
 
     return NextResponse.json({ ok: true, documentId, status: 'processing' })
   } catch (error: unknown) {
