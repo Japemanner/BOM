@@ -1,33 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { AssistentenBeheer } from './assistenten-beheer'
-import type { AssistantStatus } from '@/types'
 
 const TEAL = '#1D9E75'
 
 interface SettingsTabsProps {
-  assistants: { id: string; name: string; description: string; type: string; status: string; tenantId: string; createdAt: string; updatedAt: string; webhookUrl: string | null }[]
+  // Leeg — alleen nog 'Algemeen' tab
 }
 
 const TABS = [
-  { id: 'algemeen',    label: 'Algemeen' },
-  { id: 'assistenten', label: 'Assistenten beheer' },
+  { id: 'algemeen', label: 'Algemeen' },
 ]
 
-export function SettingsTabs({ assistants }: SettingsTabsProps) {
-  const [active, setActive] = useState('assistenten')
-
-  const dbAssistants = assistants.map((a) => ({
-    id: a.id,
-    name: a.name,
-    description: a.description,
-    type: a.type,
-    status: a.status as AssistantStatus,
-    runsToday: 0,
-    source: 'db' as const,
-    tenantId: a.tenantId,
-  }))
+export function SettingsTabs() {
+  const [active, setActive] = useState('algemeen')
 
   return (
     <div>
@@ -67,10 +53,6 @@ export function SettingsTabs({ assistants }: SettingsTabsProps) {
             <PlaceholderRow label="Omgeving" value={process.env.NODE_ENV ?? 'unknown'} />
           </Section>
         </div>
-      )}
-
-      {active === 'assistenten' && (
-        <AssistentenBeheer dbAssistants={dbAssistants} />
       )}
     </div>
   )
