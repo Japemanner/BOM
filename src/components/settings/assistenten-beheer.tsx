@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   FileText, Mail, FileCheck, UserCheck, AlignLeft, Send, Bot,
-  Play, Pause, Trash2, Loader2, Plus, X, Save,
+  Play, Pause, Settings, Trash2, Loader2, Plus, X, Save,
 } from 'lucide-react'
 import { useAssistantsStore } from '@/store/assistants-store'
 import type { AssistantStatus } from '@/types'
@@ -589,6 +589,19 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
                     ? <Pause size={11} color="#6B7280" />
                     : <Play size={11} color={TEAL} />
                   }
+                </button>
+
+                {/* Bewerken */}
+                <button
+                  onClick={() => openEdit(a)}
+                  title="Bewerken"
+                  style={{
+                    width: 28, height: 28, borderRadius: 6, border: '0.5px solid #EAECEF',
+                    background: '#F8FAFC', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <Settings size={11} color="#6B7280" />
                 </button>
 
                 {/* Verwijderen */}

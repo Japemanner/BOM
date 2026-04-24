@@ -1,6 +1,23 @@
 import { redirect } from 'next/navigation'
+import { db } from '@/db'
+import { eq } from 'drizzle-orm'
+import { assistants } from '@/db/schema/app'
 import { SettingsTabs } from '@/components/settings/settings-tabs'
+import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
+
+async function getData(tenantId: string) {
+  try {
+    const allAssistants = await db
+      .select()
+      .from(assistants)
+      .where(eq(assistants.tenantId, tenantId))
+      .orderBy(assistants.createdAt)
+    return { allAssistants }
+  } catch {
+    return { allAssistants: [] }
+  }
+}
 
 function ErrorPage({ title, message }: { title: string; message: string }) {
   return (
@@ -54,6 +71,15 @@ export default async function SettingsPage() {
     }
   }
 
+  const { allAssistants } = await getData(result.tenantId)
+
+  const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => ({
+    ...a,
+    status: a.status as AssistantStatus,
+    createdAt: a.createdAt.toISOString(),
+    updatedAt: a.updatedAt.toISOString(),
+  }))
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div
@@ -74,7 +100,7 @@ export default async function SettingsPage() {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
         <div style={{ maxWidth: 840 }}>
-          <SettingsTabs />
+          <SettingsTabs assistants={assistantsData} />
         </div>
       </div>
     </div>
