@@ -591,19 +591,6 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
                   }
                 </button>
 
-                {/* Bewerken */}
-                <button
-                  onClick={() => openEdit(a)}
-                  title="Bewerken"
-                  style={{
-                    width: 28, height: 28, borderRadius: 6, border: '0.5px solid #EAECEF',
-                    background: '#F8FAFC', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <Settings size={11} color="#6B7280" />
-                </button>
-
                 {/* Verwijderen */}
                 <button
                   onClick={() => handleDelete(a)}
