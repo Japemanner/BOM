@@ -108,6 +108,7 @@ export interface RagWebhookPayload {
   filename: string
   tenantId: string
   assistantId: string
+  assistantName: string
   userId: string
   timestamp: string
 }
@@ -125,7 +126,7 @@ export async function sendRagWebhook(
   const jwt = await createOutboundJwt(secret, {
     runId: payload.documentId,
     assistantId: payload.assistantId,
-    assistantName: 'rag-processor',
+    assistantName: payload.assistantName,
     tenantId: payload.tenantId,
   })
 

@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
         status: ragDocuments.status,
         tenantId: ragDocuments.tenantId,
         s3Key: ragDocuments.s3Key,
+        metadata: ragDocuments.metadata,
         webhookTokenEncrypted: assistants.webhookTokenEncrypted,
       })
       .from(ragDocuments)
@@ -93,21 +94,23 @@ export async function POST(request: NextRequest) {
     // ── Update document status ────────────────────────────────────────
     step = 'update-status'
     if (newStatus === 'indexed') {
+      const existingMeta = (doc.metadata ?? {}) as Record<string, unknown>
       await db
         .update(ragDocuments)
         .set({
           status: 'indexed',
           processedAt: new Date(),
-          metadata: { ...(meta ?? {}) },
+          metadata: { ...existingMeta, ...(meta ?? {}) },
         })
         .where(eq(ragDocuments.id, documentId))
     } else {
+      const existingMeta = (doc.metadata ?? {}) as Record<string, unknown>
       await db
         .update(ragDocuments)
         .set({
           status: 'failed',
           errorMessage: errorMsg ?? 'Onbekende fout',
-          metadata: { ...(meta ?? {}) },
+          metadata: { ...existingMeta, ...(meta ?? {}) },
         })
         .where(eq(ragDocuments.id, documentId))
     }

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { assistants, ragDocuments } from '@/db/schema/app'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { sendRagWebhook } from '@/lib/outbound-webhook'
 import { decrypt } from '@/lib/crypto'
 import { deleteS3Object } from '@/lib/s3'
+import { auth } from '@/lib/auth'
+import { canDo } from '@/lib/permissions'
+import { headers } from 'next/headers'
 
 const bodySchema = z.object({
   documentId: z.string().uuid(),
@@ -13,7 +16,17 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   let step = 'init'
+  let documentId = '' // scope voor catch-block
   try {
+    // ── Auth ──────────────────────────────────────────────────────────
+    step = 'auth'
+    const hdrs = await headers()
+    const session = await auth.api.getSession({ headers: hdrs })
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Niet geauthenticeerd' }, { status: 401 })
+    }
+    const userId = session.user.id
+
     step = 'parse-body'
     const rawBody: unknown = await request.json().catch(() => null)
     const parsed = bodySchema.safeParse(rawBody)
@@ -23,7 +36,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const { documentId } = parsed.data
+    documentId = parsed.data.documentId
 
     // ── Haal document + assistant op (tenant isolatie) ──────────────
     step = 'fetch-document'
@@ -36,13 +49,23 @@ export async function POST(request: NextRequest) {
         s3Key: ragDocuments.s3Key,
         status: ragDocuments.status,
         runInput: ragDocuments.metadata,
+        assistantName: assistants.name,
+        webhookUrl: assistants.webhookUrl,
+        webhookTokenEncrypted: assistants.webhookTokenEncrypted,
       })
       .from(ragDocuments)
+      .innerJoin(assistants, eq(ragDocuments.assistantId, assistants.id))
       .where(eq(ragDocuments.id, documentId))
       .limit(1)
 
     if (!doc) {
       return NextResponse.json({ error: 'Document niet gevonden' }, { status: 404 })
+    }
+
+    // ── RBAC ──────────────────────────────────────────────────────────
+    step = 'rbac'
+    if (!await canDo(userId, doc.tenantId, 'assistants', 'read')) {
+      return NextResponse.json({ error: 'Geen toegang tot dit document' }, { status: 403 })
     }
 
     if (doc.status !== 'uploaded') {
@@ -52,25 +75,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Haal assistant webhook config op ────────────────────────────
-    step = 'fetch-assistant'
-    const [assistant] = await db
-      .select({
-        id: assistants.id,
-        name: assistants.name,
-        tenantId: assistants.tenantId,
-        webhookUrl: assistants.webhookUrl,
-        webhookTokenEncrypted: assistants.webhookTokenEncrypted,
-      })
-      .from(assistants)
-      .where(eq(assistants.id, doc.assistantId))
-      .limit(1)
-
-    if (!assistant) {
-      return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
-    }
-
-    if (!assistant.webhookUrl || !assistant.webhookTokenEncrypted) {
+    if (!doc.webhookUrl || !doc.webhookTokenEncrypted) {
       return NextResponse.json(
         { error: 'Assistent heeft geen webhook geconfigureerd' },
         { status: 400 }
@@ -81,21 +86,42 @@ export async function POST(request: NextRequest) {
     step = 'decrypt-secret'
     let secret: string
     try {
-      secret = decrypt(assistant.webhookTokenEncrypted)
+      secret = decrypt(doc.webhookTokenEncrypted)
     } catch {
       return NextResponse.json({ error: 'Webhook secret decryptie mislukt' }, { status: 500 })
+    }
+
+    // ── Idempotentie: atomair status naar processing zetten ────────
+    // Alleen updaten als status nog 'uploaded' is — voorkomt dubbele N8N triggers
+    step = 'lock-status'
+    const [locked] = await db
+      .update(ragDocuments)
+      .set({ status: 'processing' })
+      .where(and(
+        eq(ragDocuments.id, documentId),
+        eq(ragDocuments.status, 'uploaded')
+      ))
+      .returning({ id: ragDocuments.id })
+
+    if (!locked) {
+      // Race condition: iemand anders heeft al confirm aangeroepen
+      return NextResponse.json(
+        { error: 'Document wordt al verwerkt', status: 'processing' },
+        { status: 409 }
+      )
     }
 
     // ── Triggereer N8N RAG webhook (fire-and-forget) ──────────────
     step = 'trigger-n8n'
     const input = doc.runInput as { uploadedBy?: string } ?? {}
     try {
-      await sendRagWebhook(assistant.webhookUrl, secret, {
+      await sendRagWebhook(doc.webhookUrl, secret, {
         documentId,
         s3Key: doc.s3Key,
         filename: doc.filename,
         tenantId: doc.tenantId,
         assistantId: doc.assistantId,
+        assistantName: doc.assistantName,
         userId: input.uploadedBy ?? 'unknown',
         timestamp: new Date().toISOString(),
       })
@@ -113,29 +139,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Update status naar processing ────────────────────────────────
-    step = 'update-status'
-    await db
-      .update(ragDocuments)
-      .set({ status: 'processing' })
-      .where(eq(ragDocuments.id, documentId))
-
     return NextResponse.json({ ok: true, documentId, status: 'processing' })
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error)
 
-    // Best effort: markeer als failed
-    try {
-      const rawBody: unknown = await request.json().catch(() => null)
-      const { documentId } = rawBody as { documentId?: string } ?? {}
-      if (documentId) {
+    // Best effort: markeer als failed (gebruik documentId uit bovenliggende scope)
+    if (documentId) {
+      try {
         await db
           .update(ragDocuments)
           .set({ status: 'failed', errorMessage: errMsg })
           .where(eq(ragDocuments.id, documentId))
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
     return NextResponse.json(

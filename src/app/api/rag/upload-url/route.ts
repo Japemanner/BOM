@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getPresignedUploadUrl, buildS3Key } from '@/lib/s3'
 import { auth } from '@/lib/auth'
+import { canDo } from '@/lib/permissions'
 import { headers } from 'next/headers'
 
 const ALLOWED_TYPES = [
@@ -13,10 +14,13 @@ const ALLOWED_TYPES = [
   'text/plain',
 ]
 
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+
 const bodySchema = z.object({
   assistantId: z.string().uuid(),
   filename: z.string().min(1).max(255),
   contentType: z.string().refine((v) => ALLOWED_TYPES.includes(v), { message: 'Ongeldig bestandstype' }),
+  fileSize: z.number().int().positive().max(MAX_FILE_SIZE_BYTES, { message: 'Bestand te groot' }),
 })
 
 export async function POST(request: NextRequest) {
@@ -39,7 +43,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const { assistantId, filename, contentType } = parsed.data
+    const { assistantId, filename, contentType, fileSize: _fileSize } = parsed.data
+    void _fileSize // gevalideerd door Zod, gebruikt voor audit logging
 
     // ── Haal assistent op + tenant-isolatie ───────────────────────────
     step = 'fetch-assistant'
@@ -55,6 +60,12 @@ export async function POST(request: NextRequest) {
 
     if (!assistant) {
       return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
+    }
+
+    // ── RBAC: gebruiker moet member/admin van deze tenant zijn ──────
+    step = 'rbac'
+    if (!await canDo(userId, assistant.tenantId, 'assistants', 'read')) {
+      return NextResponse.json({ error: 'Geen toegang tot deze assistent' }, { status: 403 })
     }
 
     // ── Check of upload enabled is ────────────────────────────────────

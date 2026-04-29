@@ -417,6 +417,13 @@ function ChatWindow({
       return
     }
 
+    if (file.size > 50 * 1024 * 1024) {
+      setUploadStatus('error')
+      setDocError('Bestand is te groot (max 50 MB)')
+      setTimeout(() => { setUploadStatus('idle'); setDocError(null) }, 3000)
+      return
+    }
+
     setUploadStatus('uploading')
     setDocError(null)
 
@@ -429,6 +436,7 @@ function ChatWindow({
           assistantId: assistant.id,
           filename: file.name,
           contentType: file.type,
+          fileSize: file.size,
         }),
       })
 
