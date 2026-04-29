@@ -20,7 +20,6 @@ export default async function ReviewDetailPage({ params }: ReviewDetailPageProps
   }
 
   const { id } = await params
-  const tenantId = result.tenantId
 
   const [row] = await db
     .select({

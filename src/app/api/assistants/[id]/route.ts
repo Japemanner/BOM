@@ -43,6 +43,7 @@ export async function GET(
       return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
     }
     const { webhookTokenEncrypted: _wte, ...safe } = assistant
+    void _wte
     return NextResponse.json(safe)
   } catch (error) {
     console.error('[assistants/[id] GET]', error)
@@ -98,6 +99,7 @@ export async function PATCH(
     }
 
     const { webhookTokenEncrypted: _wte, ...safe } = updated
+    void _wte
     return NextResponse.json(safe)
   } catch (error) {
     console.error('[assistants/[id] PATCH]', error)

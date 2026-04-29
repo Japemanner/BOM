@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import Link from 'next/link'
 import { Check, X, ArrowLeft, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Circle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -91,13 +92,13 @@ export function ReviewDetail({ item }: ReviewDetailProps) {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="mb-6">
-        <a
+        <Link
           href="/inbox"
           className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Terug naar inbox
-        </a>
+        </Link>
       </div>
 
       <div className="rounded-xl border border-slate-100 bg-white p-6 space-y-4">

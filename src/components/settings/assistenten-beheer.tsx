@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   FileText, Mail, FileCheck, UserCheck, AlignLeft, Send, Bot,
-  Play, Pause, Settings, Trash2, Loader2, Plus, X, Save,
+  Play, Pause, Trash2, Loader2, Plus, X, Save,
 } from 'lucide-react'
 import { useAssistantsStore } from '@/store/assistants-store'
 import type { AssistantStatus } from '@/types'
@@ -364,11 +364,6 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
-  }
-
-  const openEdit = (a: ManagedAssistant) => {
-    setForm({ ...EMPTY_FORM, name: a.name, description: a.description, type: a.type, offline: a.status !== 'active' })
-    setEditingId(a.id)
   }
 
   const openNew = () => {

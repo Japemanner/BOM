@@ -4,8 +4,6 @@ import { useState } from 'react'
 import {
   Send,
   Mail,
-  CheckCircle2,
-  AlertCircle,
   ChevronDown,
   ChevronUp,
   Loader2,

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
 import { reviewItems as reviewItemsTable, assistants } from '@/db/schema/app'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, desc } from 'drizzle-orm'
 import { getSessionOutcome } from '@/lib/session'
 import { ReviewStatus, ReviewPriority } from '@/types'
 import { InboxClient } from '@/components/inbox/inbox-client'

@@ -5,8 +5,6 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
 import { createOutboundJwt } from '@/lib/outbound-webhook'
-import { RunStatus } from '@/types'
-
 const bodySchema = z.object({
   assistantId: z.string().uuid(),
   status: z

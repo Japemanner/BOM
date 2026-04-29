@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { webhookTokens } from '@/db/schema/app'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { randomBytes, createHash } from 'crypto'
 import { z } from 'zod'
 import { canDo } from '@/lib/permissions'

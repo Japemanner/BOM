@@ -119,33 +119,6 @@ const INPUT_STYLE: React.CSSProperties = {
   background: '#fff', color: '#111827', fontFamily: 'inherit',
 }
 
-function SmallToggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      style={{
-        width: 32, height: 17, borderRadius: 9, border: 'none', padding: 0,
-        background: checked ? TEAL : '#E2E8F0',
-        position: 'relative', cursor: 'pointer',
-        transition: 'background 0.2s', flexShrink: 0,
-      }}
-    >
-      <span style={{
-        position: 'absolute', width: 13, height: 13, borderRadius: '50%',
-        background: '#fff', top: 2, left: checked ? 17 : 2,
-        transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
-      }} />
-    </button>
-  )
-}
-
 function Field({ label, rightLabel, children }: { label: string; rightLabel?: string; children: React.ReactNode }) {
   return (
     <div>

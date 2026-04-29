@@ -5,8 +5,8 @@ import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
+  void _request
   let step = 'init'
   try {
     step = 'auth'

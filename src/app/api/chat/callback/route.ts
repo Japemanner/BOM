@@ -6,9 +6,6 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
 import { jwtVerify } from 'jose'
-import { auth } from '@/lib/auth'
-import { headers } from 'next/headers'
-
 const bodySchema = z.object({
   runId: z.string().uuid(),
   text: z.string().min(1),

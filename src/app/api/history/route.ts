@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { assistantRuns, assistants } from '@/db/schema/app'
 import { users } from '@/db/schema/auth'
-import { eq, desc, sql, and } from 'drizzle-orm'
+import { eq, desc, sql } from 'drizzle-orm'
 import { getSessionContext } from '@/lib/session'
 
 export async function GET(request: Request) {

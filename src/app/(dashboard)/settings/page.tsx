@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { db } from '@/db'
 import { eq } from 'drizzle-orm'
 import { assistants } from '@/db/schema/app'
@@ -39,12 +40,12 @@ function ErrorPage({ title, message }: { title: string; message: string }) {
         <div style={{ textAlign: 'center', maxWidth: 400 }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, color: '#0F172A', marginBottom: 8 }}>{title}</h2>
           <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 24 }}>{message}</p>
-          <a href="/" style={{
+          <Link href="/" style={{
             display: 'inline-block', padding: '10px 20px', borderRadius: 8,
             background: '#3B82F6', color: '#fff', textDecoration: 'none', fontSize: 14,
           }}>
             Terug naar dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -73,7 +74,7 @@ export default async function SettingsPage() {
 
   const { allAssistants } = await getData(result.tenantId)
 
-  const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => ({
+  const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => (void _wte, {
     ...a,
     status: a.status as AssistantStatus,
     createdAt: a.createdAt.toISOString(),

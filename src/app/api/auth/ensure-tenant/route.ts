@@ -20,7 +20,6 @@ export async function POST() {
       return NextResponse.json({ ok: true, tenantId: existing.tenantId })
     }
 
-    const email = userId
     const slug = `user-${userId.slice(0, 8)}`
 
     const [tenant] = await db

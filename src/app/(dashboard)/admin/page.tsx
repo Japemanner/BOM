@@ -60,7 +60,7 @@ export default async function AdminPage() {
     result.tenantId
   )
 
-  const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => ({
+  const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => (void _wte, {
     ...a,
     status: a.status as AssistantStatus,
     createdAt: a.createdAt.toISOString(),

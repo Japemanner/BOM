@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { assistants } from '@/db/schema/app'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { AssistantStatus } from '@/types'
 import { canDo } from '@/lib/permissions'
@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { webhookTokenEncrypted: _wte, ...safe } = created
+    void _wte
     return NextResponse.json(safe, { status: 201 })
   } catch (error) {
     console.error('[assistants POST]', error)
