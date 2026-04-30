@@ -10,6 +10,7 @@ import {
   Plug,
   Zap,
   Shield,
+  Database,
 } from 'lucide-react'
 
 const TEAL = '#1D9E75'
@@ -21,8 +22,9 @@ interface NavItem {
 }
 
 const WORKSPACE_ITEMS: NavItem[] = [
-   { href: '/',            icon: LayoutGrid,    label: 'Mijn assistenten' },
-   { href: '/history',       icon: BookOpen,      label: 'Historie' },
+   { href: '/',                   icon: LayoutGrid,    label: 'Mijn assistenten' },
+   { href: '/knowledge-sources',  icon: Database,      label: 'Kennisbronnen' },
+   { href: '/history',            icon: BookOpen,      label: 'Historie' },
 ]
 
 const MANAGE_ITEMS: NavItem[] = [

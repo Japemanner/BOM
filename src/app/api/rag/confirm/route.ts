@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, ragDocuments } from '@/db/schema/app'
+import { assistants, knowledgeSources, ragDocuments } from '@/db/schema/app'
 import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { sendRagWebhook } from '@/lib/outbound-webhook'
@@ -16,9 +16,8 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   let step = 'init'
-  let documentId = '' // scope voor catch-block
+  let documentId = ''
   try {
-    // ── Auth ──────────────────────────────────────────────────────────
     step = 'auth'
     const hdrs = await headers()
     const session = await auth.api.getSession({ headers: hdrs })
@@ -38,23 +37,19 @@ export async function POST(request: NextRequest) {
     }
     documentId = parsed.data.documentId
 
-    // ── Haal document + assistant op (tenant isolatie) ──────────────
     step = 'fetch-document'
     const [doc] = await db
       .select({
         id: ragDocuments.id,
         tenantId: ragDocuments.tenantId,
         assistantId: ragDocuments.assistantId,
+        knowledgeSourceId: ragDocuments.knowledgeSourceId,
         filename: ragDocuments.filename,
         s3Key: ragDocuments.s3Key,
         status: ragDocuments.status,
         runInput: ragDocuments.metadata,
-        assistantName: assistants.name,
-        webhookUrl: assistants.webhookUrl,
-        webhookTokenEncrypted: assistants.webhookTokenEncrypted,
       })
       .from(ragDocuments)
-      .innerJoin(assistants, eq(ragDocuments.assistantId, assistants.id))
       .where(eq(ragDocuments.id, documentId))
       .limit(1)
 
@@ -62,7 +57,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Document niet gevonden' }, { status: 404 })
     }
 
-    // ── RBAC ──────────────────────────────────────────────────────────
     step = 'rbac'
     if (!await canDo(userId, doc.tenantId, 'assistants', 'read')) {
       return NextResponse.json({ error: 'Geen toegang tot dit document' }, { status: 403 })
@@ -75,24 +69,61 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!doc.webhookUrl || !doc.webhookTokenEncrypted) {
+    // Resolve webhook URL and secret from assistant or knowledge source
+    let webhookUrl: string | null = null
+    let webhookTokenEncrypted: string | null = null
+    let assistantName: string | undefined
+    let knowledgeSourceName: string | undefined
+
+    if (doc.assistantId) {
+      const [assistant] = await db
+        .select({
+          name: assistants.name,
+          webhookUrl: assistants.webhookUrl,
+          webhookTokenEncrypted: assistants.webhookTokenEncrypted,
+        })
+        .from(assistants)
+        .where(eq(assistants.id, doc.assistantId))
+        .limit(1)
+
+      if (assistant) {
+        webhookUrl = assistant.webhookUrl
+        webhookTokenEncrypted = assistant.webhookTokenEncrypted
+        assistantName = assistant.name
+      }
+    } else if (doc.knowledgeSourceId) {
+      const [ks] = await db
+        .select({
+          name: knowledgeSources.name,
+          config: knowledgeSources.config,
+        })
+        .from(knowledgeSources)
+        .where(eq(knowledgeSources.id, doc.knowledgeSourceId))
+        .limit(1)
+
+      if (ks) {
+        const cfg = ks.config as { webhookUrl?: string; webhookTokenEncrypted?: string } | null
+        knowledgeSourceName = ks.name
+        webhookUrl = cfg?.webhookUrl ?? null
+        webhookTokenEncrypted = cfg?.webhookTokenEncrypted ?? null
+      }
+    }
+
+    if (!webhookUrl || !webhookTokenEncrypted) {
       return NextResponse.json(
-        { error: 'Assistent heeft geen webhook geconfigureerd' },
+        { error: 'Geen webhook geconfigureerd voor deze bron' },
         { status: 400 }
       )
     }
 
-    // ── Decrypt secret ────────────────────────────────────────────────
     step = 'decrypt-secret'
     let secret: string
     try {
-      secret = decrypt(doc.webhookTokenEncrypted)
+      secret = decrypt(webhookTokenEncrypted)
     } catch {
       return NextResponse.json({ error: 'Webhook secret decryptie mislukt' }, { status: 500 })
     }
 
-    // ── Idempotentie: atomair status naar processing zetten ────────
-    // Alleen updaten als status nog 'uploaded' is — voorkomt dubbele N8N triggers
     step = 'lock-status'
     const [locked] = await db
       .update(ragDocuments)
@@ -104,30 +135,29 @@ export async function POST(request: NextRequest) {
       .returning({ id: ragDocuments.id })
 
     if (!locked) {
-      // Race condition: iemand anders heeft al confirm aangeroepen
       return NextResponse.json(
         { error: 'Document wordt al verwerkt', status: 'processing' },
         { status: 409 }
       )
     }
 
-    // ── Triggereer N8N RAG webhook (fire-and-forget) ──────────────
     step = 'trigger-n8n'
     const input = doc.runInput as { uploadedBy?: string } ?? {}
     try {
-      await sendRagWebhook(doc.webhookUrl, secret, {
+      await sendRagWebhook(webhookUrl, secret, {
         documentId,
         s3Key: doc.s3Key,
         filename: doc.filename,
         tenantId: doc.tenantId,
-        assistantId: doc.assistantId,
-        assistantName: doc.assistantName,
+        assistantId: doc.assistantId ?? undefined,
+        assistantName,
+        knowledgeSourceId: doc.knowledgeSourceId ?? undefined,
+        knowledgeSourceName,
         userId: input.uploadedBy ?? 'unknown',
         timestamp: new Date().toISOString(),
       })
     } catch (sendErr: unknown) {
       const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr)
-      // Cleanup: markeer als failed en probeer S3 object te verwijderen
       await db
         .update(ragDocuments)
         .set({ status: 'failed', errorMessage: `N8N trigger mislukt: ${errMsg}` })
@@ -143,7 +173,6 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error)
 
-    // Best effort: markeer als failed (gebruik documentId uit bovenliggende scope)
     if (documentId) {
       try {
         await db

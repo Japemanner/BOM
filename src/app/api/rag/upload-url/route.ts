@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, ragDocuments } from '@/db/schema/app'
+import { assistants, knowledgeSources, ragDocuments } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { getPresignedUploadUrl, buildS3Key } from '@/lib/s3'
+import { getPresignedUploadUrl, buildS3Key, buildKnowledgeS3Key } from '@/lib/s3'
 import { auth } from '@/lib/auth'
 import { canDo } from '@/lib/permissions'
 import { headers } from 'next/headers'
@@ -14,13 +14,16 @@ const ALLOWED_TYPES = [
   'text/plain',
 ]
 
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
 const bodySchema = z.object({
-  assistantId: z.string().uuid(),
+  assistantId: z.string().uuid().optional(),
+  knowledgeSourceId: z.string().uuid().optional(),
   filename: z.string().min(1).max(255),
   contentType: z.string().refine((v) => ALLOWED_TYPES.includes(v), { message: 'Ongeldig bestandstype' }),
   fileSize: z.number().int().positive().max(MAX_FILE_SIZE_BYTES, { message: 'Bestand te groot' }),
+}).refine((d) => d.assistantId || d.knowledgeSourceId, {
+  message: 'assistantId of knowledgeSourceId is verplicht',
 })
 
 export async function POST(request: NextRequest) {
@@ -43,51 +46,79 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const { assistantId, filename, contentType, fileSize: _fileSize } = parsed.data
-    void _fileSize // gevalideerd door Zod, gebruikt voor audit logging
+    const { assistantId, knowledgeSourceId, filename, contentType, fileSize: _fileSize } = parsed.data
+    void _fileSize
 
-    // ── Haal assistent op + tenant-isolatie ───────────────────────────
-    step = 'fetch-assistant'
-    const [assistant] = await db
-      .select({
-        id: assistants.id,
-        tenantId: assistants.tenantId,
-        config: assistants.config,
-      })
-      .from(assistants)
-      .where(eq(assistants.id, assistantId))
-      .limit(1)
+    let tenantId: string
+    let docAssistantId: string | undefined
+    let docKnowledgeSourceId: string | undefined
 
-    if (!assistant) {
-      return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
+    if (assistantId) {
+      step = 'fetch-assistant'
+      const [assistant] = await db
+        .select({
+          id: assistants.id,
+          tenantId: assistants.tenantId,
+          config: assistants.config,
+        })
+        .from(assistants)
+        .where(eq(assistants.id, assistantId))
+        .limit(1)
+
+      if (!assistant) {
+        return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
+      }
+
+      step = 'rbac'
+      if (!await canDo(userId, assistant.tenantId, 'assistants', 'read')) {
+        return NextResponse.json({ error: 'Geen toegang tot deze assistent' }, { status: 403 })
+      }
+
+      const config = assistant.config as { canUploadFiles?: boolean } ?? {}
+      if (!config.canUploadFiles) {
+        return NextResponse.json(
+          { error: 'Bestanden uploaden is niet geactiveerd voor deze assistent' },
+          { status: 403 }
+        )
+      }
+
+      tenantId = assistant.tenantId
+      docAssistantId = assistantId
+    } else if (knowledgeSourceId) {
+      step = 'fetch-knowledge-source'
+      const [ks] = await db
+        .select({
+          id: knowledgeSources.id,
+          tenantId: knowledgeSources.tenantId,
+        })
+        .from(knowledgeSources)
+        .where(eq(knowledgeSources.id, knowledgeSourceId))
+        .limit(1)
+
+      if (!ks) {
+        return NextResponse.json({ error: 'Kennisbron niet gevonden' }, { status: 404 })
+      }
+
+      step = 'rbac'
+      if (!await canDo(userId, ks.tenantId, 'knowledge_sources', 'read')) {
+        return NextResponse.json({ error: 'Geen toegang tot deze kennisbron' }, { status: 403 })
+      }
+
+      tenantId = ks.tenantId
+      docKnowledgeSourceId = knowledgeSourceId
+    } else {
+      return NextResponse.json({ error: 'assistantId of knowledgeSourceId verplicht' }, { status: 400 })
     }
 
-    // ── RBAC: gebruiker moet member/admin van deze tenant zijn ──────
-    step = 'rbac'
-    if (!await canDo(userId, assistant.tenantId, 'assistants', 'read')) {
-      return NextResponse.json({ error: 'Geen toegang tot deze assistent' }, { status: 403 })
-    }
-
-    // ── Check of upload enabled is ────────────────────────────────────
-    const config = assistant.config as { canUploadFiles?: boolean } ?? {}
-    if (!config.canUploadFiles) {
-      return NextResponse.json(
-        { error: 'Bestanden uploaden is niet geactiveerd voor deze assistent' },
-        { status: 403 }
-      )
-    }
-
-    const tenantId = assistant.tenantId
-
-    // ── Maak ragDocuments record aan ─────────────────────────────────
     step = 'insert-document'
     const [doc] = await db
       .insert(ragDocuments)
       .values({
         tenantId,
-        assistantId,
+        assistantId: docAssistantId ?? null,
+        knowledgeSourceId: docKnowledgeSourceId ?? null,
         filename,
-        s3Key: '', // tijdelijk, updaten we straks
+        s3Key: '',
         status: 'uploaded',
         metadata: { contentType, uploadedBy: userId },
       })
@@ -98,12 +129,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Fout bij aanmaken document' }, { status: 500 })
     }
 
-    // ── Genereer presigned URL ────────────────────────────────────────
     step = 'presigned-url'
-    const s3Key = buildS3Key(tenantId, assistantId, documentId, filename)
+    let s3Key: string
+    if (docKnowledgeSourceId) {
+      s3Key = buildKnowledgeS3Key(tenantId, docKnowledgeSourceId, documentId, filename)
+    } else {
+      s3Key = buildS3Key(tenantId, docAssistantId ?? 'unknown', documentId, filename)
+    }
     const uploadUrl = await getPresignedUploadUrl(s3Key, contentType, 300)
 
-    // Update s3Key in DB
     await db
       .update(ragDocuments)
       .set({ s3Key })

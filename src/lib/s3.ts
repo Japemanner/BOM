@@ -88,3 +88,11 @@ export async function deleteS3Object(key: string): Promise<void> {
 export function buildS3Key(tenantId: string, assistantId: string, documentId: string, filename: string): string {
   return `${tenantId}/${assistantId}/${documentId}-${filename}`
 }
+
+/**
+ * Bouw de S3 key voor kennisbron-documenten:
+ * {tenantId}/knowledge/{knowledgeSourceId}/{documentId}-{filename}
+ */
+export function buildKnowledgeS3Key(tenantId: string, knowledgeSourceId: string, documentId: string, filename: string): string {
+  return `${tenantId}/knowledge/${knowledgeSourceId}/${documentId}-${filename}`
+}

@@ -5,7 +5,7 @@ import { roles, permissions, rolePermissions } from '@/db/schema/rbac'
 
 const ROLES = [
   { id: 'admin',  description: 'Volledige toegang tot alle functies' },
-  { id: 'member', description: 'Alleen-lezen toegang tot assistenten, integraties en tenant-info' },
+  { id: 'member', description: 'Lees- en schrijftoegang tot assistenten, integraties, kennisbronnen en tenant-info' },
 ]
 
 const PERMISSIONS = [
@@ -24,16 +24,24 @@ const PERMISSIONS = [
   { id: 'tenant.invite_user',        resource: 'tenant',       action: 'invite_user',        description: 'Gebruiker uitnodigen' },
   { id: 'tenant.remove_user',        resource: 'tenant',       action: 'remove_user',        description: 'Gebruiker verwijderen' },
   { id: 'tenant.update_member_role', resource: 'tenant',       action: 'update_member_role', description: 'Rol van lid wijzigen' },
-  { id: 'webhooks.manage',           resource: 'webhooks',     action: 'manage',             description: 'Webhook tokens beheren' },
+  { id: 'webhooks.manage',           resource: 'webhooks',         action: 'manage',             description: 'Webhook tokens beheren' },
+  { id: 'knowledge_sources.read',    resource: 'knowledge_sources', action: 'read',              description: 'Kennisbronnen bekijken' },
+  { id: 'knowledge_sources.create',  resource: 'knowledge_sources', action: 'create',            description: 'Kennisbron aanmaken' },
+  { id: 'knowledge_sources.update',  resource: 'knowledge_sources', action: 'update',            description: 'Kennisbron bewerken' },
+  { id: 'knowledge_sources.delete',  resource: 'knowledge_sources', action: 'delete',            description: 'Kennisbron verwijderen' },
 ]
 
 const ROLE_PERMISSIONS: { roleId: string; permissionId: string }[] = [
-  // Admin: alle 15 permissies
+  // Admin: alle permissies
   ...PERMISSIONS.map((p) => ({ roleId: 'admin', permissionId: p.id })),
-  // Member: 3 permissies
+  // Member: assistenten, integraties, tenant, kennisbronnen
   { roleId: 'member', permissionId: 'assistants.read' },
   { roleId: 'member', permissionId: 'integrations.read' },
   { roleId: 'member', permissionId: 'tenant.read' },
+  { roleId: 'member', permissionId: 'knowledge_sources.read' },
+  { roleId: 'member', permissionId: 'knowledge_sources.create' },
+  { roleId: 'member', permissionId: 'knowledge_sources.update' },
+  { roleId: 'member', permissionId: 'knowledge_sources.delete' },
 ]
 
 async function seed() {

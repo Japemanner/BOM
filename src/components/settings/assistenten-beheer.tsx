@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   FileText, Mail, FileCheck, UserCheck, AlignLeft, Send, Bot,
-  Play, Pause, Trash2, Loader2, Plus, X, Save,
+  Play, Pause, Trash2, Loader2, Plus, X, Save, Database, Edit3,
 } from 'lucide-react'
 import { useAssistantsStore } from '@/store/assistants-store'
 import type { AssistantStatus } from '@/types'
@@ -51,6 +51,7 @@ interface EditForm {
   chatten: boolean
   bestandenUploaden: boolean
   offline: boolean
+  knowledgeSourceIds: string[]
 }
 
 // ── Gedeelde mock-data (zelfde als "Mijn assistenten" dashboard) ───────────
@@ -137,6 +138,7 @@ const EMPTY_FORM: EditForm = {
   name: '', description: '', type: 'redeneer',
   sub: 'Beide', interactie: 'Web only',
   webhook: '', chatten: false, bestandenUploaden: false, offline: false,
+  knowledgeSourceIds: [],
 }
 
 // ── Hulpcomponenten ───────────────────────────────────────────────────────
@@ -190,6 +192,8 @@ function EditModal({
   onSave,
   onClose,
   isSaving,
+  availableKnowledgeSources,
+  loadingKnowledgeSources,
 }: {
   assistant: ManagedAssistant | null
   isNew: boolean
@@ -198,7 +202,16 @@ function EditModal({
   onSave: () => void
   onClose: () => void
   isSaving: boolean
+  availableKnowledgeSources: { id: string; name: string }[]
+  loadingKnowledgeSources: boolean
 }) {
+  const toggleKnowledgeSource = (id: string) => {
+    const current = form.knowledgeSourceIds
+    const next = current.includes(id)
+      ? current.filter((x) => x !== id)
+      : [...current, id]
+    onFormChange({ ...form, knowledgeSourceIds: next })
+  }
   return (
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
@@ -259,6 +272,48 @@ function EditModal({
                 {ASSISTANT_INTERACTIES.map((i) => <option key={i} value={i}>{i}</option>)}
               </select>
             </ModalField>
+          </div>
+
+          <div style={{ borderTop: '0.5px solid #F1F5F9', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 500, color: '#0F172A', margin: '0 0 2px' }}>Kennisbronnen</p>
+              <p style={{ fontSize: 11, color: '#9CA3AF', margin: '0 0 8px' }}>Koppel vector databases aan deze assistent</p>
+              {loadingKnowledgeSources ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Loader2 size={10} color="#9CA3AF" style={{ animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Laden...</span>
+                </div>
+              ) : availableKnowledgeSources.length === 0 ? (
+                <p style={{ fontSize: 11, color: '#C4C9D4' }}>
+                  Nog geen kennisbronnen beschikbaar. Maak er eerst een aan in het tabblad Kennisbronnen.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {availableKnowledgeSources.map((ks) => {
+                    const selected = form.knowledgeSourceIds.includes(ks.id)
+                    return (
+                      <button
+                        key={ks.id}
+                        type="button"
+                        onClick={() => toggleKnowledgeSource(ks.id)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          height: 26, padding: '0 10px', borderRadius: 6,
+                          border: `0.5px solid ${selected ? TEAL : '#E2E8F0'}`,
+                          background: selected ? '#ECFDF5' : '#fff',
+                          fontSize: 11, cursor: 'pointer',
+                          color: selected ? TEAL : '#6B7280',
+                          fontFamily: 'inherit', fontWeight: selected ? 500 : 400,
+                        }}
+                      >
+                        <Database size={10} strokeWidth={1.5} />
+                        {ks.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div style={{ borderTop: '0.5px solid #F1F5F9', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -360,15 +415,31 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
   const [form, setForm] = useState<EditForm>(EMPTY_FORM)
   const [loading, setLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [availableKs, setAvailableKs] = useState<{ id: string; name: string }[]>([])
+  const [loadingKs, setLoadingKs] = useState(false)
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
   }
 
-  const openNew = () => {
+  const openNew = async () => {
     setForm(EMPTY_FORM)
     setEditingId('new')
+    if (availableKs.length === 0) {
+      setLoadingKs(true)
+      try {
+        const res = await fetch('/api/knowledge-sources')
+        if (res.ok) {
+          const data = await res.json() as { id: string; name: string; status: string }[]
+          setAvailableKs(data.filter((k) => k.status === 'ready' || k.status === 'empty').map((k) => ({ id: k.id, name: k.name })))
+        }
+      } catch {
+        // stil
+      } finally {
+        setLoadingKs(false)
+      }
+    }
   }
 
   const handleToggle = async (a: ManagedAssistant) => {
@@ -397,6 +468,42 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
       }
     }
     showToast(`${a.name} ${newStatus === 'active' ? 'geactiveerd' : 'gepauzeerd'}`)
+  }
+
+  const openEdit = async (a: ManagedAssistant) => {
+    setForm({
+      ...EMPTY_FORM,
+      name: a.name,
+      description: a.description,
+      type: a.type,
+      // Haal huidige knowledgeSourceIds op
+      knowledgeSourceIds: [],
+    })
+    setEditingId(a.id)
+    setLoadingKs(true)
+    try {
+      const [ksRes, currentKsRes] = await Promise.all([
+        fetch('/api/knowledge-sources'),
+        a.source === 'db' && a.id
+          ? fetch(`/api/assistants/${a.id}/knowledge-sources`)
+          : Promise.resolve(null),
+      ])
+      if (ksRes.ok) {
+        const data = await ksRes.json() as { id: string; name: string; status: string }[]
+        setAvailableKs(data.filter((k) => k.status === 'ready' || k.status === 'empty').map((k) => ({ id: k.id, name: k.name })))
+      }
+      if (currentKsRes && currentKsRes.ok) {
+        const currentData = await currentKsRes.json() as { id: string }[]
+        setForm((prev) => ({
+          ...prev,
+          knowledgeSourceIds: currentData.map((k) => k.id),
+        }))
+      }
+    } catch {
+      // stil
+    } finally {
+      setLoadingKs(false)
+    }
   }
 
   const handleDelete = async (a: ManagedAssistant) => {
@@ -435,6 +542,14 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
         })
         if (!res.ok) throw new Error()
         const created = await res.json() as ManagedAssistant
+        // Koppel kennisbronnen
+        if (form.knowledgeSourceIds.length > 0) {
+          await fetch(`/api/assistants/${created.id}/knowledge-sources`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
+          })
+        }
         setAssistants((prev) => [...prev, { ...created, source: 'db', runsToday: 0 }])
         showToast(`${created.name} aangemaakt`)
       } else if (editingId) {
@@ -447,6 +562,12 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
             body: JSON.stringify({ name: form.name, description: form.description, type: form.type, status: newStatus }),
           })
           if (!res.ok) throw new Error()
+          // Update kennisbron-koppelingen
+          await fetch(`/api/assistants/${editingId}/knowledge-sources`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
+          })
         }
         // Sla status op in store zodat dashboard direct reageert
         setStatus(editingId, newStatus)
@@ -566,6 +687,19 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
 
               {/* Acties */}
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                {/* Bewerken */}
+                <button
+                  onClick={() => openEdit(a)}
+                  title="Bewerken"
+                  style={{
+                    width: 28, height: 28, borderRadius: 6, border: '0.5px solid #EAECEF',
+                    background: '#F8FAFC', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <Edit3 size={10} color="#6B7280" />
+                </button>
+
                 {/* Toggle */}
                 <button
                   onClick={() => handleToggle(a)}
@@ -626,6 +760,8 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
           onSave={handleSave}
           onClose={() => setEditingId(null)}
           isSaving={loading === 'save'}
+          availableKnowledgeSources={availableKs}
+          loadingKnowledgeSources={loadingKs}
         />
       )}
 

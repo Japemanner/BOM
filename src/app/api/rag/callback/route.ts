@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { ragDocuments, assistants } from '@/db/schema/app'
-import { eq } from 'drizzle-orm'
+import { ragDocuments, assistants, knowledgeSources } from '@/db/schema/app'
+import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
 import { jwtVerify } from 'jose'
@@ -27,20 +27,18 @@ export async function POST(request: NextRequest) {
     }
     const { documentId, status: newStatus, error: errorMsg, meta } = parsed.data
 
-    // ── Haal document + assistant op ────────────────────────────────
     step = 'fetch-document'
     const [doc] = await db
       .select({
         id: ragDocuments.id,
         assistantId: ragDocuments.assistantId,
+        knowledgeSourceId: ragDocuments.knowledgeSourceId,
         status: ragDocuments.status,
         tenantId: ragDocuments.tenantId,
         s3Key: ragDocuments.s3Key,
         metadata: ragDocuments.metadata,
-        webhookTokenEncrypted: assistants.webhookTokenEncrypted,
       })
       .from(ragDocuments)
-      .innerJoin(assistants, eq(ragDocuments.assistantId, assistants.id))
       .where(eq(ragDocuments.id, documentId))
       .limit(1)
 
@@ -55,14 +53,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!doc.webhookTokenEncrypted) {
+    // Resolve webhook token from assistant or knowledge source
+    let webhookTokenEncrypted: string | null = null
+
+    if (doc.assistantId) {
+      const [assistant] = await db
+        .select({ webhookTokenEncrypted: assistants.webhookTokenEncrypted })
+        .from(assistants)
+        .where(eq(assistants.id, doc.assistantId))
+        .limit(1)
+      webhookTokenEncrypted = assistant?.webhookTokenEncrypted ?? null
+    } else if (doc.knowledgeSourceId) {
+      const [ks] = await db
+        .select({ config: knowledgeSources.config })
+        .from(knowledgeSources)
+        .where(eq(knowledgeSources.id, doc.knowledgeSourceId))
+        .limit(1)
+      const cfg = ks?.config as { webhookTokenEncrypted?: string } | null
+      webhookTokenEncrypted = cfg?.webhookTokenEncrypted ?? null
+    }
+
+    if (!webhookTokenEncrypted) {
       return NextResponse.json(
-        { error: 'Assistent heeft geen webhook secret geconfigureerd' },
+        { error: 'Bron heeft geen webhook secret geconfigureerd' },
         { status: 500 }
       )
     }
 
-    // ── Valideer JWT ──────────────────────────────────────────────────
     step = 'validate-jwt'
     const authHeader = request.headers.get('authorization')
     if (!authHeader?.startsWith('Bearer ')) {
@@ -72,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     let secret: string
     try {
-      secret = decrypt(doc.webhookTokenEncrypted)
+      secret = decrypt(webhookTokenEncrypted)
     } catch {
       return NextResponse.json({ error: 'Webhook secret decryptie mislukt' }, { status: 500 })
     }
@@ -83,7 +100,6 @@ export async function POST(request: NextRequest) {
         new TextEncoder().encode(secret),
         { issuer: 'bom', audience: 'n8n', clockTolerance: 60 }
       )
-      // Extra beveiliging: documentId in JWT claim moet matchen met body
       if (jwtPayload.runId !== documentId) {
         return NextResponse.json({ error: 'JWT runId mismatch' }, { status: 403 })
       }
@@ -91,10 +107,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ongeldige of expired JWT' }, { status: 401 })
     }
 
-    // ── Update document status ────────────────────────────────────────
     step = 'update-status'
+    const existingMeta = (doc.metadata ?? {}) as Record<string, unknown>
+
     if (newStatus === 'indexed') {
-      const existingMeta = (doc.metadata ?? {}) as Record<string, unknown>
       await db
         .update(ragDocuments)
         .set({
@@ -103,8 +119,18 @@ export async function POST(request: NextRequest) {
           metadata: { ...existingMeta, ...(meta ?? {}) },
         })
         .where(eq(ragDocuments.id, documentId))
+
+      // Update knowledge source status and count if applicable
+      if (doc.knowledgeSourceId) {
+        await db
+          .update(knowledgeSources)
+          .set({ status: 'ready', updatedAt: new Date(), documentCount: 1 })
+          .where(and(
+            eq(knowledgeSources.id, doc.knowledgeSourceId),
+            eq(knowledgeSources.status, 'processing'),
+          ))
+      }
     } else {
-      const existingMeta = (doc.metadata ?? {}) as Record<string, unknown>
       await db
         .update(ragDocuments)
         .set({
@@ -113,6 +139,13 @@ export async function POST(request: NextRequest) {
           metadata: { ...existingMeta, ...(meta ?? {}) },
         })
         .where(eq(ragDocuments.id, documentId))
+
+      if (doc.knowledgeSourceId) {
+        await db
+          .update(knowledgeSources)
+          .set({ status: 'error', updatedAt: new Date() })
+          .where(eq(knowledgeSources.id, doc.knowledgeSourceId))
+      }
     }
 
     return NextResponse.json({ ok: true, documentId, status: newStatus })

@@ -3,8 +3,8 @@ import { SignJWT } from 'jose'
 
 export interface OutboundWebhookClaims {
   runId: string
-  assistantId: string
-  assistantName: string
+  assistantId?: string
+  assistantName?: string
   tenantId: string
 }
 
@@ -107,8 +107,10 @@ export interface RagWebhookPayload {
   s3Key: string
   filename: string
   tenantId: string
-  assistantId: string
-  assistantName: string
+  assistantId?: string
+  assistantName?: string
+  knowledgeSourceId?: string
+  knowledgeSourceName?: string
   userId: string
   timestamp: string
 }
@@ -125,8 +127,8 @@ export async function sendRagWebhook(
 ): Promise<void> {
   const jwt = await createOutboundJwt(secret, {
     runId: payload.documentId,
-    assistantId: payload.assistantId,
-    assistantName: payload.assistantName,
+    assistantId: payload.assistantId ?? 'unknown',
+    assistantName: payload.assistantName ?? payload.knowledgeSourceName ?? 'RAG',
     tenantId: payload.tenantId,
   })
 

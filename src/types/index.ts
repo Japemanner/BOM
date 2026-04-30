@@ -83,11 +83,32 @@ export interface DashboardMetrics {
 }
 
 // RBAC-permissie types
+export const KnowledgeSourceStatus = {
+  EMPTY: 'empty',
+  PROCESSING: 'processing',
+  READY: 'ready',
+  ERROR: 'error',
+} as const
+export type KnowledgeSourceStatus = (typeof KnowledgeSourceStatus)[keyof typeof KnowledgeSourceStatus]
+
+export interface KnowledgeSource {
+  id: string
+  tenantId: string
+  name: string
+  description: string
+  status: KnowledgeSourceStatus
+  documentCount: number
+  config: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 export const PermissionResource = {
   ASSISTANTS: 'assistants',
   INTEGRATIONS: 'integrations',
   TENANT: 'tenant',
   WEBHOOKS: 'webhooks',
+  KNOWLEDGE_SOURCES: 'knowledge_sources',
 } as const
 export type PermissionResource = (typeof PermissionResource)[keyof typeof PermissionResource]
 

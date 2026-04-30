@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const PROTECTED_PATHS = ['/assistants', '/inbox', '/integrations', '/settings']
+const PROTECTED_PATHS = ['/assistants', '/inbox', '/integrations', '/settings', '/knowledge-sources']
 const AUTH_PATHS = ['/login', '/register']
 
 export async function middleware(request: NextRequest) {

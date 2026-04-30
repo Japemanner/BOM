@@ -60,6 +60,31 @@ export const reviewItems = appSchema.table('review_items', {
   resolvedBy: text('resolved_by').references(() => users.id),
 })
 
+export const knowledgeSources = appSchema.table('knowledge_sources', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  status: text('status').notNull().default('empty'),  // 'empty' | 'processing' | 'ready' | 'error'
+  documentCount: integer('document_count').notNull().default(0),
+  config: jsonb('config').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const assistantKnowledgeSources = appSchema.table('assistant_knowledge_sources', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assistantId: uuid('assistant_id')
+    .notNull()
+    .references(() => assistants.id, { onDelete: 'cascade' }),
+  knowledgeSourceId: uuid('knowledge_source_id')
+    .notNull()
+    .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 export const integrations = appSchema.table('integrations', {
   id: uuid('id').defaultRandom().primaryKey(),
   tenantId: uuid('tenant_id')
@@ -77,8 +102,9 @@ export const ragDocuments = appSchema.table('rag_documents', {
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' }),
   assistantId: uuid('assistant_id')
-    .notNull()
     .references(() => assistants.id, { onDelete: 'cascade' }),
+  knowledgeSourceId: uuid('knowledge_source_id')
+    .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
   filename: text('filename').notNull(),
   s3Key: text('s3_key').notNull(),
   status: text('status').notNull().default('uploaded'),  // 'uploaded' | 'processing' | 'indexed' | 'failed'
