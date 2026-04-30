@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, X, ArrowLeft, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Circle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { extractApiError } from '@/lib/logger'
 import { ReviewPriority, ReviewStatus } from '@/types'
 
 interface ReviewDetailItem {
@@ -72,8 +73,8 @@ export function ReviewDetail({ item }: ReviewDetailProps) {
         body: JSON.stringify({ status }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Onbekende fout' }))
-        console.error('[review action]', data.error ?? res.status)
+        const err = await extractApiError(res)
+        console.error('[review action]', err)
         return
       }
       // Terug naar inbox na succes

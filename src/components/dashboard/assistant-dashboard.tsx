@@ -16,6 +16,7 @@ import {
 import { AssistantCard } from './assistant-card'
 import { useOptimisticToggle } from '@/hooks/use-optimistic-toggle'
 import { useAssistantsStore } from '@/store/assistants-store'
+import { extractApiError } from '@/lib/logger'
 import type { AssistantStatus } from '@/types'
 import type { MetricsData } from './metrics-strip'
 
@@ -919,7 +920,10 @@ export function AssistantDashboard({
             type: 'custom',
           }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
         const created = (await res.json()) as Assistant
         setLocalAssistants((prev) => [created, ...prev])
         setSelectedId(created.id)
@@ -934,7 +938,10 @@ export function AssistantDashboard({
             description: configForm.description,
           }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
         const updated = (await res.json()) as Assistant
         setLocalAssistants((prev) =>
           prev.map((a) =>
@@ -945,8 +952,9 @@ export function AssistantDashboard({
         )
         showToast(`${updated.name} opgeslagen`)
       }
-    } catch {
-      showToast('Opslaan mislukt', false)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Onbekende fout'
+      showToast(`Opslaan mislukt: ${msg}`, false)
     } finally {
       setIsSaving(false)
     }

@@ -5,6 +5,7 @@ import {
   Plus, Database, Loader2, Trash2, Edit3,
   Upload, X, Check, AlertCircle,
 } from 'lucide-react'
+import { extractApiError } from '@/lib/logger'
 import type { KnowledgeSource } from '@/types'
 
 const TEAL = '#1D9E75'
@@ -313,7 +314,10 @@ export function KnowledgeSourcesView({ sources }: KnowledgeSourcesViewProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: editName, description: editDescription }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
         const created = await res.json() as KnowledgeSource
         setList((prev) => [created, ...prev])
         showToast(`${created.name} aangemaakt`)
@@ -323,15 +327,19 @@ export function KnowledgeSourcesView({ sources }: KnowledgeSourcesViewProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: editName, description: editDescription }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
         setList((prev) => prev.map((s) =>
           s.id === editingId ? { ...s, name: editName, description: editDescription } : s
         ))
         showToast(`${editName} opgeslagen`)
       }
       setEditingId(null)
-    } catch {
-      showToast('Opslaan mislukt', false)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Onbekende fout'
+      showToast(`Opslaan mislukt: ${msg}`, false)
     } finally {
       setLoading(null)
     }

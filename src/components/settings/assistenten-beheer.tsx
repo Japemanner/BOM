@@ -6,6 +6,7 @@ import {
   Play, Pause, Trash2, Loader2, Plus, X, Save, Database, Edit3,
 } from 'lucide-react'
 import { useAssistantsStore } from '@/store/assistants-store'
+import { extractApiError } from '@/lib/logger'
 import type { AssistantStatus } from '@/types'
 
 async function logEvent(
@@ -434,8 +435,8 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
           const data = await res.json() as { id: string; name: string; status: string }[]
           setAvailableKs(data.filter((k) => k.status === 'ready' || k.status === 'empty').map((k) => ({ id: k.id, name: k.name })))
         }
-      } catch {
-        // stil
+      } catch (err) {
+        console.warn('[assistenten-beheer] openNew: laden kennisbronnen mislukt', err)
       } finally {
         setLoadingKs(false)
       }
@@ -457,12 +458,16 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: newStatus }),
         })
-        if (!res.ok) throw new Error()
-      } catch {
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
+      } catch (error) {
         // Terugdraaien
         setAssistants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: a.status } : x))
         setStatus(a.id, a.status)
-        showToast('Wijziging mislukt', false)
+        const msg = error instanceof Error ? error.message : 'Onbekende fout'
+        showToast(`Statuswijziging mislukt: ${msg}`, false)
       } finally {
         setLoading(null)
       }
@@ -499,8 +504,8 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
           knowledgeSourceIds: currentData.map((k) => k.id),
         }))
       }
-    } catch {
-      // stil
+    } catch (err) {
+      console.warn('[assistenten-beheer] openEdit: laden kennisbronnen of koppelingen mislukt', err)
     } finally {
       setLoadingKs(false)
     }
@@ -515,10 +520,14 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
       setLoading(a.id + '_del')
       try {
         const res = await fetch(`/api/assistants/${a.id}`, { method: 'DELETE' })
-        if (!res.ok) throw new Error()
-      } catch {
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
+      } catch (error) {
         setAssistants((prev) => [...prev, a])
-        showToast('Verwijderen mislukt', false)
+        const msg = error instanceof Error ? error.message : 'Onbekende fout'
+        showToast(`Verwijderen mislukt: ${msg}`, false)
         return
       } finally {
         setLoading(null)
@@ -540,7 +549,10 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
             tenantId: '00000000-0000-0000-0000-000000000001',
           }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const err = await extractApiError(res)
+          throw new Error(err)
+        }
         const created = await res.json() as ManagedAssistant
         // Koppel kennisbronnen (non-blocking)
         if (form.knowledgeSourceIds.length > 0) {
@@ -548,7 +560,7 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
-          }).catch(() => { /* kennisbron-updates mogen save niet blokkeren */ })
+          }).catch((err) => { console.warn('[assistenten-beheer] kennisbron-update mislukt:', err) })
         }
         setAssistants((prev) => [...prev, { ...created, source: 'db', runsToday: 0 }])
         showToast(`${created.name} aangemaakt`)
@@ -561,13 +573,16 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: form.name, description: form.description, type: form.type, status: newStatus }),
           })
-          if (!res.ok) throw new Error()
+          if (!res.ok) {
+            const err = await extractApiError(res)
+            throw new Error(err)
+          }
           // Update kennisbron-koppelingen (non-blocking)
           fetch(`/api/assistants/${editingId}/knowledge-sources`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
-          }).catch(() => { /* kennisbron-updates mogen save niet blokkeren */ })
+          }).catch((err) => { console.warn('[assistenten-beheer] kennisbron-update mislukt:', err) })
         }
         // Sla status op in store zodat dashboard direct reageert
         setStatus(editingId, newStatus)
@@ -582,8 +597,9 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
         showToast(`${form.name} opgeslagen`)
       }
       setEditingId(null)
-    } catch {
-      showToast('Opslaan mislukt', false)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Onbekende fout'
+      showToast(`Opslaan mislukt: ${msg}`, false)
     } finally {
       setLoading(null)
     }

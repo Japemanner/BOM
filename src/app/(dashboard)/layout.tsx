@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/layout/sidebar'
 import { EnsureTenant } from '@/components/layout/ensure-tenant'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 export default function DashboardLayout({
   children,
@@ -26,7 +27,9 @@ export default function DashboardLayout({
           minWidth: 0,
         }}
       >
-        <EnsureTenant>{children}</EnsureTenant>
+        <ErrorBoundary>
+          <EnsureTenant>{children}</EnsureTenant>
+        </ErrorBoundary>
       </div>
     </div>
   )

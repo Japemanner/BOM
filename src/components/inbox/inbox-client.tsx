@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { extractApiError } from '@/lib/logger'
 import { ReviewPriority, ReviewStatus } from '@/types'
 
 interface InboxItem {
@@ -118,14 +119,14 @@ export function InboxClient({ items }: InboxClientProps) {
           body: JSON.stringify({ status }),
         })
         if (!res.ok) {
-          const data = await res.json().catch(() => ({ error: 'Onbekende fout' }))
-          console.error('[review action]', data.error ?? res.status)
+          const err = await extractApiError(res)
+          console.error('[review action]', err)
           return
         }
         // Hard refresh om lijst opnieuw te laden vanuit server
         window.location.reload()
       } catch (err) {
-        console.error('[review action]', err)
+        console.error('[review action] netwerkfout:', err)
       } finally {
         setLoadingId(null)
       }
