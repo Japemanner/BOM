@@ -542,13 +542,13 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
         })
         if (!res.ok) throw new Error()
         const created = await res.json() as ManagedAssistant
-        // Koppel kennisbronnen
+        // Koppel kennisbronnen (non-blocking)
         if (form.knowledgeSourceIds.length > 0) {
-          await fetch(`/api/assistants/${created.id}/knowledge-sources`, {
+          fetch(`/api/assistants/${created.id}/knowledge-sources`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
-          })
+          }).catch(() => { /* kennisbron-updates mogen save niet blokkeren */ })
         }
         setAssistants((prev) => [...prev, { ...created, source: 'db', runsToday: 0 }])
         showToast(`${created.name} aangemaakt`)
@@ -562,12 +562,12 @@ export function AssistentenBeheer({ dbAssistants }: AssistentenBeheerProps) {
             body: JSON.stringify({ name: form.name, description: form.description, type: form.type, status: newStatus }),
           })
           if (!res.ok) throw new Error()
-          // Update kennisbron-koppelingen
-          await fetch(`/api/assistants/${editingId}/knowledge-sources`, {
+          // Update kennisbron-koppelingen (non-blocking)
+          fetch(`/api/assistants/${editingId}/knowledge-sources`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
-          })
+          }).catch(() => { /* kennisbron-updates mogen save niet blokkeren */ })
         }
         // Sla status op in store zodat dashboard direct reageert
         setStatus(editingId, newStatus)

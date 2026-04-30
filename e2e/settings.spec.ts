@@ -93,6 +93,19 @@ test.describe('Instellingen — tabs en assistentenbeheer', () => {
     await expect(page.getByPlaceholder('Bijv. Factuurverwerker')).not.toBeVisible()
   })
 
+  test('opslaan op demo-assistent toont succes, niet Opslaan mislukt', async ({ page }) => {
+    await page.getByRole('button', { name: 'Assistenten beheer' }).click()
+
+    await page.getByTitle('Bewerken').first().click()
+    await expect(page.getByPlaceholder('Bijv. Factuurverwerker')).toBeVisible()
+
+    await page.getByPlaceholder('Bijv. Factuurverwerker').fill('Gewijzigd')
+    await page.getByRole('button', { name: 'Opslaan' }).click()
+
+    await expect(page.getByText('Gewijzigd opgeslagen')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Opslaan mislukt')).not.toBeVisible()
+  })
+
   test('tab Algemeen toont account- en platform-info', async ({ page }) => {
     await page.getByRole('button', { name: 'Algemeen' }).click()
 
