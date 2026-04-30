@@ -39,6 +39,18 @@ npm run test:e2e:report # Playwright test rapport
 
 **Belangrijk:** Draai altijd `npm run typecheck` en `npm run lint` na codewijzigingen.
 
+## Deployment
+
+Push naar `main` gebeurt aan het einde van elke afgeronde taak. Deze push triggert
+automatisch een deploy van de applicatie.
+
+```bash
+# Workflow aan het einde van elke afgeronde taak:
+npm run typecheck   # TypeScript controle
+npm run lint        # ESLint controle
+git push origin main # Deploy trigger
+```
+
 ## Domeinen & Database Schemas
 
 ```

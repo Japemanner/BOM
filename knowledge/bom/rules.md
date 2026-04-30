@@ -4,3 +4,4 @@
 - `assistant_events` zijn append-only — geen updates, geen deletes
 - Webhook tokens altijd encrypted opgeslagen (AES-256-GCM)
 - Geen Amerikaanse providers zonder expliciete goedkeuring
+- Push naar `main` triggert automatisch een deploy — altijd typecheck + lint vóór push

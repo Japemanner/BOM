@@ -11,3 +11,4 @@ Review gewijzigde code in de BOM codebase op correctheid, veiligheid en architec
 3. **Schema-grenzen** — geen directe `rbac.*` queries buiten `src/lib/permissions.ts`
 4. **TypeScript** — geen `any`, geen onnodige type assertions
 5. **GDPR** — geen logging van persoonlijke data (email, naam) in plaintext
+6. **Deploy readiness** — `npm run typecheck` en `npm run lint` geslaagd, push naar `main` triggert deploy

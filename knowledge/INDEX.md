@@ -10,6 +10,11 @@
 | Better Auth | `/knowledge/auth/` | Auth flow, sessies, magic link |
 | BOM domein | `/knowledge/bom/` | Multi-tenancy, assistants, webhooks |
 
+## Deployment
+
+Push naar `main` gebeurt aan het einde van elke afgeronde taak. Deze push triggert
+automatisch een deploy van de applicatie.
+
 ## Regels
 
 - Raadpleeg bestaande kennis voordat je een beslissing neemt

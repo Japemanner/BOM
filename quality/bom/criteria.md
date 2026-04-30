@@ -47,6 +47,13 @@ Elke taak wordt geëvalueerd tegen onderstaande criteria voordat deze als voltoo
 | V1 | Geen hardcoded tenant IDs | verplicht |
 | V2 | Webhook tokens encrypted (AES-256-GCM) waar van toepassing | hoog |
 
+### Deployment
+
+| # | Criterium | Gewicht |
+|---|-----------|---------|
+| D1 | Push naar `main` triggert deploy | verplicht |
+| D2 | `npm run typecheck` en `npm run lint` succesvol vóór push | verplicht |
+
 ## Evaluatieformat
 
 ```markdown

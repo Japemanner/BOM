@@ -13,3 +13,4 @@
 - API routes: `NextResponse.json()` met expliciete HTTP-statuscodes
 - Protected routes: `canDo()` check vóór elke schrijfoperatie
 - Tenant context altijd uit sessie/request, nooit hardcoded
+- Deploy: push naar `main` triggert automatisch deploy — `npm run typecheck` + `npm run lint` vóór elke push

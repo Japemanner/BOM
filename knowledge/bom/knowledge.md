@@ -13,6 +13,9 @@
 - `assistant_events` — immutable audit logs, append-only, geen FK naar assistants
 - `review_items` — beoordelingen met prioriteit-sortering
 - `webhook_tokens` — AES-256-GCM encrypted tokens (ENCRYPTION_KEY vereist)
+- `knowledge_sources` — tenant-breed kennisbronnen (vector databases) voor RAG
+- `assistant_knowledge_sources` — many-to-many koppeling assistent ↔ kennisbron
+- `rag_documents` — document uploads voor vectorisatie (gekoppeld aan kennisbron of assistent)
 
 ## Webhook flow
 
@@ -25,3 +28,8 @@
 - Theory of Constraints: elimineer bottleneck vóór nieuwe features
 - Ontkoppeling: routes mogen niet direct andere routes aanroepen
 - Eventgedreven: `assistant_events` zijn append-only audit logs
+
+## Deployment
+
+Push naar `main` gebeurt aan het einde van elke afgeronde taak. Deze push triggert
+automatisch een deploy van de applicatie.
