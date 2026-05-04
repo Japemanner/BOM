@@ -83,6 +83,7 @@ interface EditForm {
   webhookTokenEditing: boolean
   chatten: boolean
   bestandenUploaden: boolean
+  knowledgeSourceIds: string[]
 }
 
 const emptyForm: EditForm = {
@@ -96,6 +97,7 @@ const emptyForm: EditForm = {
   webhookTokenEditing: false,
   chatten: false,
   bestandenUploaden: false,
+  knowledgeSourceIds: [],
 }
 
 const fieldStyle: React.CSSProperties = {
@@ -177,6 +179,8 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
   const [form, setForm] = useState<EditForm>(emptyForm)
   const [loading, setLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [availableKs, setAvailableKs] = useState<{ id: string; name: string }[]>([])
+  const [loadingKs, setLoadingKs] = useState(false)
 
   const [newTokenName, setNewTokenName] = useState('')
   const [showTokenInput, setShowTokenInput] = useState(false)
@@ -289,11 +293,22 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
       webhookTokenEditing: false,
       chatten: false,
       bestandenUploaden: config.canUploadFiles ?? false,
+      knowledgeSourceIds: [],
     })
     setRevealedToken(null)
     setShowTokenInput(false)
     setConfirmDeleteToken(null)
     setEditingId(a.id)
+    setLoadingKs(true)
+    fetch('/api/knowledge-sources')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setAvailableKs(data as { id: string; name: string }[]))
+      .catch(() => setAvailableKs([]))
+      .finally(() => setLoadingKs(false))
+    fetch(`/api/assistants/${a.id}/knowledge-sources`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setForm((f) => ({ ...f, knowledgeSourceIds: (data as { id: string }[]).map((k) => k.id) })))
+      .catch(() => setForm((f) => ({ ...f, knowledgeSourceIds: [] })))
   }
 
   const openNew = () => {
@@ -301,6 +316,12 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
     setRevealedToken(null)
     setShowTokenInput(false)
     setEditingId('new')
+    setLoadingKs(true)
+    fetch('/api/knowledge-sources')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setAvailableKs(data as { id: string; name: string }[]))
+      .catch(() => setAvailableKs([]))
+      .finally(() => setLoadingKs(false))
   }
 
   const handleSave = async () => {
@@ -333,13 +354,17 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
         }
         const created = (await res.json()) as Assistant
         setAssistants((prev) => [created, ...prev])
+        fetch(`/api/assistants/${created.id}/knowledge-sources`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
+        }).catch(() => {})
         showToast(`${created.name} aangemaakt`)
       } else {
         const patchBody: Record<string, unknown> = {
           name: form.name,
           description: form.description,
           type: form.type,
-          config: { canUploadFiles: form.bestandenUploaden },
         }
         if (form.webhookUrl !== undefined) patchBody.webhookUrl = form.webhookUrl || null
         if (form.webhookTokenEditing && form.webhookToken) {
@@ -362,6 +387,11 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
         }
         const updated = (await res.json()) as Assistant
         setAssistants((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+        fetch(`/api/assistants/${editingId}/knowledge-sources`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ knowledgeSourceIds: form.knowledgeSourceIds }),
+        }).catch(() => {})
         showToast(`${updated.name} opgeslagen`)
       }
       setEditingId(null)
@@ -818,6 +848,47 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
                 </FormField>
               </div>
 
+              <div style={{ borderTop: '1px solid #F1F5F9', margin: '4px 0' }} />
+
+              <div style={{ borderTop: '0.5px solid #F1F5F9', paddingTop: 12 }}>
+                <p style={{ fontSize: 12, fontWeight: 500, color: '#0F172A', margin: '0 0 2px' }}>Kennisbronnen</p>
+                <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 8px' }}>Koppel vector databases aan deze assistent</p>
+                {loadingKs ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Loader2 size={10} color="#94A3B8" style={{ animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Laden...</span>
+                  </div>
+                ) : availableKs.length === 0 ? (
+                  <p style={{ fontSize: 11, color: '#C4C9D4' }}>Nog geen kennisbronnen beschikbaar.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {availableKs.map((ks) => {
+                      const selected = form.knowledgeSourceIds.includes(ks.id)
+                      return (
+                        <button key={ks.id} type="button"
+                          onClick={() => {
+                            const next = selected
+                              ? form.knowledgeSourceIds.filter((x) => x !== ks.id)
+                              : [...form.knowledgeSourceIds, ks.id]
+                            setForm((f) => ({ ...f, knowledgeSourceIds: next }))
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            height: 26, padding: '0 10px', borderRadius: 6,
+                            border: `0.5px solid ${selected ? TEAL : '#E2E8F0'}`,
+                            background: selected ? '#ECFDF5' : '#fff',
+                            fontSize: 11, cursor: 'pointer',
+                            color: selected ? TEAL : '#6B7280',
+                            fontFamily: 'inherit', fontWeight: selected ? 500 : 400,
+                          }}>
+                          {ks.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div style={{ borderTop: '0.5px solid #F1F5F9' }} />
 
               <ModalToggleRow
@@ -825,12 +896,6 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
                 description="Gebruiker kan berichten sturen"
                 checked={form.chatten}
                 onChange={(v) => setForm((f) => ({ ...f, chatten: v }))}
-              />
-              <ModalToggleRow
-                label="Bestanden uploaden"
-                description="Gebruiker kan bijlagen meesturen"
-                checked={form.bestandenUploaden}
-                onChange={(v) => setForm((f) => ({ ...f, bestandenUploaden: v }))}
               />
 
             </div>
