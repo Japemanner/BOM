@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Send,
   Mail,
+  Database,
   ChevronDown,
   ChevronUp,
   Loader2,
   X,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 const TEAL = '#1D9E75'
@@ -26,6 +29,16 @@ interface MailConfig {
   smtpPassword: string
   fromAddress: string
   fromName: string
+}
+
+interface RagIntegration {
+  id: string
+  type: string
+  status: string
+  config: {
+    webhookUrl: string | null
+    hasToken: boolean
+  }
 }
 
 // ── Hulpcomponenten ────────────────────────────────────────────────────────
@@ -107,7 +120,6 @@ function TelegramCard() {
       return
     }
     setStatus('testing')
-    // Simuleer API-call — vervang door echte Telegram getMe-check
     await new Promise((r) => setTimeout(r, 1200))
     const ok = config.botToken.length > 20
     setStatus(ok ? 'connected' : 'error')
@@ -247,7 +259,6 @@ function MailCard() {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* SMTP host + port */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 10 }}>
           <Field label="SMTP-host">
             <input
@@ -267,7 +278,6 @@ function MailCard() {
           </Field>
         </div>
 
-        {/* Gebruikersnaam + wachtwoord */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="Gebruikersnaam">
             <input
@@ -288,7 +298,6 @@ function MailCard() {
           </Field>
         </div>
 
-        {/* Afzender */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="Afzendernaam">
             <input
@@ -351,6 +360,192 @@ function MailCard() {
   )
 }
 
+// ── RAG Vectorisatie kaart ─────────────────────────────────────────────────
+
+function RagCard() {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected')
+  const [showSecret, setShowSecret] = useState(false)
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookToken, setWebhookToken] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  useEffect(() => {
+    fetch('/api/integrations')
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = (await res.json()) as RagIntegration[]
+        const rag = data.find((d) => d.type === 'rag')
+        if (rag) {
+          if (rag.config.webhookUrl) setWebhookUrl(rag.config.webhookUrl)
+          if (rag.status === 'active') setStatus('connected')
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleSave = async () => {
+    if (!webhookUrl.trim()) {
+      showToast('Webhook URL is verplicht')
+      return
+    }
+    if (!webhookToken.trim()) {
+      showToast('Secret is verplicht')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/integrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'rag',
+          config: { webhookUrl: webhookUrl.trim(), webhookToken: webhookToken.trim() },
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      setStatus('connected')
+      showToast('RAG vectorisatie webhook opgeslagen')
+    } catch (err) {
+      showToast(`Opslaan mislukt: ${err instanceof Error ? err.message : 'Onbekende fout'}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDisconnect = () => {
+    setWebhookUrl('')
+    setWebhookToken('')
+    setStatus('disconnected')
+    showToast('RAG webhook verwijderd — opslaan om wijziging door te voeren')
+  }
+
+  if (loading) {
+    return (
+      <IntegrationCard
+        icon={<Database size={18} color="#9CA3AF" />}
+        iconBg="#F3F4F6"
+        title="RAG Vectorisatie"
+        description="Configureer de n8n webhook voor document vectorisatie"
+        status="disconnected"
+        open={open}
+        onToggle={() => setOpen((v) => !v)}
+        toast={null}
+        onToastClose={() => {}}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+          <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: '#9CA3AF' }} />
+        </div>
+      </IntegrationCard>
+    )
+  }
+
+  return (
+    <IntegrationCard
+      icon={<Database size={18} color={status === 'connected' ? TEAL : '#9CA3AF'} />}
+      iconBg={status === 'connected' ? '#ECFDF5' : '#F3F4F6'}
+      title="RAG Vectorisatie"
+      description="Configureer de n8n webhook voor document vectorisatie — gedeeld voor alle kennisbronnen"
+      status={status}
+      open={open}
+      onToggle={() => setOpen((v) => !v)}
+      toast={toast}
+      onToastClose={() => setToast(null)}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        <Field label="Webhook URL" hint="— de n8n-webhook die vectorisatie triggert">
+          <input
+            value={webhookUrl}
+            onChange={(e) => setWebhookUrl(e.target.value)}
+            placeholder="https://jouw-n8n.domein.nl/webhook/rag-vectorize"
+            style={inputStyle}
+          />
+        </Field>
+
+        <Field label="Secret" hint="— gedeeld JWT-secret voor beveiligde communicatie">
+          <div style={{ position: 'relative' }}>
+            <input
+              value={webhookToken}
+              onChange={(e) => setWebhookToken(e.target.value)}
+              placeholder="minimaal 8 tekens"
+              type={showSecret ? 'text' : 'password'}
+              style={{ ...inputStyle, paddingRight: 36 }}
+            />
+            <button
+              onClick={() => setShowSecret((v) => !v)}
+              style={{
+                position: 'absolute',
+                right: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 2,
+                color: '#9CA3AF',
+                display: 'flex',
+              }}
+            >
+              {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+        </Field>
+
+        <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              height: 32, padding: '0 14px', borderRadius: 7,
+              background: TEAL, color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+              opacity: saving ? 0.6 : 1,
+              fontFamily: 'inherit',
+            }}
+          >
+            {saving
+              ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Opslaan...</>
+              : 'Opslaan'
+            }
+          </button>
+          {status === 'connected' && (
+            <button
+              onClick={handleDisconnect}
+              style={{
+                height: 32, padding: '0 14px', borderRadius: 7,
+                border: '0.5px solid #FECACA', background: '#FEF2F2',
+                color: '#B91C1C', fontSize: 12, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Ontkoppelen
+            </button>
+          )}
+        </div>
+
+        <p style={{ fontSize: 11, color: '#9CA3AF', margin: 0 }}>
+          BOM verstuurt een JWT-beveiligde POST naar deze webhook bij document-upload.
+          De n8n-workflow verwerkt het document en belt terug via <code>/api/rag/callback</code>.
+          Dit secret wordt versleuteld opgeslagen.
+        </p>
+      </div>
+    </IntegrationCard>
+  )
+}
+
 // ── Generieke kaart wrapper ────────────────────────────────────────────────
 
 interface IntegrationCardProps {
@@ -380,7 +575,6 @@ function IntegrationCard({
           overflow: 'hidden',
         }}
       >
-        {/* Header */}
         <div
           onClick={onToggle}
           style={{
@@ -420,7 +614,6 @@ function IntegrationCard({
           </div>
         </div>
 
-        {/* Uitklapbaar formulier */}
         {open && (
           <div
             style={{
@@ -433,7 +626,6 @@ function IntegrationCard({
         )}
       </div>
 
-      {/* Toast per kaart */}
       {toast && (
         <div
           style={{
@@ -464,11 +656,43 @@ function IntegrationCard({
 
 // ── Hoofdpagina ────────────────────────────────────────────────────────────
 
+const tabStyle: React.CSSProperties = {
+  height: 32,
+  padding: '0 14px',
+  borderRadius: 6,
+  border: 'none',
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  transition: 'background 0.15s',
+}
+
+const tabActiveStyle: React.CSSProperties = {
+  ...tabStyle,
+  background: TEAL,
+  color: '#fff',
+}
+
+const tabInactiveStyle: React.CSSProperties = {
+  ...tabStyle,
+  background: '#F3F4F6',
+  color: '#6B7280',
+}
+
+type TabId = 'kanalen' | 'kennisbronnen'
+
 export function IntegrationsView() {
+  const [activeTab, setActiveTab] = useState<TabId>('kanalen')
+
+  const tabs: { id: TabId; label: string }[] = [
+    { id: 'kanalen', label: 'Kanalen' },
+    { id: 'kennisbronnen', label: 'Kennisbronnen' },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* Topbar */}
       <div
         style={{
           height: 52, background: '#fff',
@@ -482,24 +706,31 @@ export function IntegrationsView() {
         </span>
       </div>
 
-      {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
         <div style={{ maxWidth: 640 }}>
 
-          {/* Sectieheader */}
-          <p
-            style={{
-              fontSize: 10, fontWeight: 500, color: '#9CA3AF',
-              textTransform: 'uppercase', letterSpacing: '0.06em',
-              margin: '0 0 12px',
-            }}
-          >
-            Kanalen
-          </p>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={activeTab === tab.id ? tabActiveStyle : tabInactiveStyle}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <TelegramCard />
-            <MailCard />
+            {activeTab === 'kanalen' && (
+              <>
+                <TelegramCard />
+                <MailCard />
+              </>
+            )}
+            {activeTab === 'kennisbronnen' && (
+              <RagCard />
+            )}
           </div>
 
         </div>

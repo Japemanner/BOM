@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, knowledgeSources, ragDocuments } from '@/db/schema/app'
+import { assistants, integrations, knowledgeSources, ragDocuments } from '@/db/schema/app'
 import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { sendRagWebhook } from '@/lib/outbound-webhook'
@@ -69,13 +69,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Resolve webhook URL and secret from assistant or knowledge source
+    // Eerst globale RAG integratie checken, daarna fallback naar per-KS config
     let webhookUrl: string | null = null
     let webhookTokenEncrypted: string | null = null
     let assistantName: string | undefined
     let knowledgeSourceName: string | undefined
 
-    if (doc.assistantId) {
+    const [globalRag] = await db
+      .select({ config: integrations.config })
+      .from(integrations)
+      .where(and(eq(integrations.tenantId, doc.tenantId), eq(integrations.type, 'rag'), eq(integrations.status, 'active')))
+      .limit(1)
+
+    if (globalRag) {
+      const cfg = globalRag.config as { webhookUrl?: string; webhookTokenEncrypted?: string } | null
+      if (cfg?.webhookUrl && cfg?.webhookTokenEncrypted) {
+        webhookUrl = cfg.webhookUrl
+        webhookTokenEncrypted = cfg.webhookTokenEncrypted
+      }
+    }
+
+    if (!webhookUrl && doc.assistantId) {
       const [assistant] = await db
         .select({
           name: assistants.name,
@@ -91,7 +105,9 @@ export async function POST(request: NextRequest) {
         webhookTokenEncrypted = assistant.webhookTokenEncrypted
         assistantName = assistant.name
       }
-    } else if (doc.knowledgeSourceId) {
+    }
+
+    if (!webhookUrl && doc.knowledgeSourceId) {
       const [ks] = await db
         .select({
           name: knowledgeSources.name,
