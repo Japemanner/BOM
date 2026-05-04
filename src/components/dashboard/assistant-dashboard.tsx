@@ -617,6 +617,7 @@ function ChatWindow({
               color: msg.role === 'user' ? '#fff' : '#0F172A',
               padding: '8px 12px', borderRadius: 12,
               fontSize: 12, lineHeight: 1.45,
+              whiteSpace: 'pre-wrap',
               border: msg.role === 'user' ? 'none' : '0.5px solid #EAECEF',
             }}
           >
