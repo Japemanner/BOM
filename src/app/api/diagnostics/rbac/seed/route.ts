@@ -41,12 +41,29 @@ const ROLE_PERMISSIONS: { roleId: string; permissionId: string }[] = [
   { roleId: 'member', permissionId: 'knowledge_sources.delete' },
 ]
 
+async function runSeed() {
+  await db.insert(roles).values(ROLES).onConflictDoNothing()
+  await db.insert(permissions).values(PERMISSIONS).onConflictDoNothing()
+  await db.insert(rolePermissions).values(ROLE_PERMISSIONS).onConflictDoNothing()
+}
+
+export async function GET() {
+  try {
+    await runSeed()
+    return NextResponse.json({
+      success: true,
+      message: 'RBAC seed uitgevoerd',
+      counts: { roles: ROLES.length, permissions: PERMISSIONS.length, rolePermissions: ROLE_PERMISSIONS.length },
+    })
+  } catch (error) {
+    console.error('[seed/rbac]', error)
+    return NextResponse.json({ error: 'Seed mislukt' }, { status: 500 })
+  }
+}
+
 export async function POST() {
   try {
-    await db.insert(roles).values(ROLES).onConflictDoNothing()
-    await db.insert(permissions).values(PERMISSIONS).onConflictDoNothing()
-    await db.insert(rolePermissions).values(ROLE_PERMISSIONS).onConflictDoNothing()
-
+    await runSeed()
     return NextResponse.json({
       success: true,
       message: 'RBAC seed uitgevoerd',
