@@ -1,6 +1,7 @@
 // src/types/index.ts
 
 export const UserRole = {
+  SUPER_ADMIN: 'super_admin',
   ADMIN: 'admin',
   MEMBER: 'member',
 } as const

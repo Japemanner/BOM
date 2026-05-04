@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AdminAssistants } from './admin-assistants'
+import { AdminUsers } from './admin-users'
 import type { AssistantStatus, WebhookToken } from '@/types'
 
 const TEAL = '#1D9E75'
@@ -31,14 +32,17 @@ interface AdminDashboardProps {
   assistants: Assistant[]
   tenants: Tenant[]
   inboundTokens: WebhookToken[]
+  isSuperAdmin: boolean
+  currentUserId: string
 }
 
 const SUBTABS = [
   { id: 'assistenten', label: 'Assistenten beheer' },
   { id: 'webhooks',    label: 'Webhook tokens' },
+  { id: 'gebruikers',  label: 'Gebruikers' },
 ]
 
-export function AdminDashboard({ assistants, tenants, inboundTokens }: AdminDashboardProps) {
+export function AdminDashboard({ assistants, tenants, inboundTokens, isSuperAdmin, currentUserId }: AdminDashboardProps) {
   const [active, setActive] = useState('assistenten')
 
   return (
@@ -99,6 +103,14 @@ export function AdminDashboard({ assistants, tenants, inboundTokens }: AdminDash
             </div>
           )}
         </div>
+      )}
+
+      {active === 'gebruikers' && (
+        <AdminUsers
+          tenants={tenants}
+          isSuperAdmin={isSuperAdmin}
+          currentUserId={currentUserId}
+        />
       )}
     </div>
   )

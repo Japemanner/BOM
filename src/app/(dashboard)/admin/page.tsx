@@ -6,6 +6,7 @@ import { tenants } from '@/db/schema/iam'
 import { AdminDashboard } from '@/components/admin/admin-dashboard'
 import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
+import { isUserSuperAdmin } from '@/lib/permissions'
 
 async function getData(tenantId: string) {
   try {
@@ -60,6 +61,8 @@ export default async function AdminPage() {
     result.tenantId
   )
 
+  const superAdmin = await isUserSuperAdmin(result.userId)
+
   const assistantsData = allAssistants.map(({ webhookTokenEncrypted: _wte, ...a }) => (void _wte, {
     ...a,
     status: a.status as AssistantStatus,
@@ -89,6 +92,8 @@ export default async function AdminPage() {
           assistants={assistantsData}
           tenants={tenantsData}
           inboundTokens={inboundTokensData}
+          isSuperAdmin={superAdmin}
+          currentUserId={result.userId}
         />
       </div>
     </div>

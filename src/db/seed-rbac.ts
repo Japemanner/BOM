@@ -4,7 +4,8 @@ import { db } from '@/db'
 import { roles, permissions, rolePermissions } from '@/db/schema/rbac'
 
 const ROLES = [
-  { id: 'admin',  description: 'Volledige toegang tot alle functies' },
+  { id: 'super_admin', description: 'Platform-beheerder: volledige toegang tot alle tenants en functies' },
+  { id: 'admin',  description: 'Volledige toegang tot alle functies binnen eigen organisatie' },
   { id: 'member', description: 'Lees- en schrijftoegang tot assistenten, integraties, kennisbronnen en tenant-info' },
 ]
 
@@ -32,6 +33,8 @@ const PERMISSIONS = [
 ]
 
 const ROLE_PERMISSIONS: { roleId: string; permissionId: string }[] = [
+  // Super admin: alle permissies
+  ...PERMISSIONS.map((p) => ({ roleId: 'super_admin', permissionId: p.id })),
   // Admin: alle permissies
   ...PERMISSIONS.map((p) => ({ roleId: 'admin', permissionId: p.id })),
   // Member: assistenten, integraties, tenant, kennisbronnen
