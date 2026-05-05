@@ -50,6 +50,45 @@ const roleBadgeStyle: Record<string, React.CSSProperties> = {
   },
 }
 
+const roleHelpText = 'Beheerder: volledige toegang tot assistenten, integraties, webhooks en gebruikersbeheer. Medewerker: kan assistenten, integraties en kennisbronnen bekijken en bewerken, maar geen webhooks of gebruikers beheren.'
+
+function RoleHelp() {
+  const [show, setShow] = useState(false)
+
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 15, height: 15, borderRadius: '50%',
+          border: '0.5px solid #94A3B8', color: '#94A3B8',
+          fontSize: 9, fontWeight: 600, cursor: 'help',
+        }}
+      >?</span>
+      {show && (
+        <span style={{
+          position: 'absolute',
+          bottom: 'calc(100% + 6px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#0F172A',
+          color: '#fff',
+          fontSize: 12,
+          padding: '8px 12px',
+          borderRadius: 6,
+          whiteSpace: 'nowrap',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 100,
+        }}>
+          {roleHelpText}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function CreateUserModal({
   onClose,
   onCreated,
@@ -168,15 +207,7 @@ function CreateUserModal({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: '#374151' }}>Rol</span>
-              <span
-                title="Beheerder: volledige toegang tot assistenten, integraties, webhooks en gebruikersbeheer. Medewerker: kan assistenten, integraties en kennisbronnen bekijken en bewerken, maar geen webhooks of gebruikers beheren."
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 15, height: 15, borderRadius: '50%',
-                  border: '0.5px solid #94A3B8', color: '#94A3B8',
-                  fontSize: 9, fontWeight: 600, cursor: 'help',
-                }}
-              >?</span>
+              <RoleHelp />
             </div>
             <select
               value={role}
@@ -505,15 +536,7 @@ export function AdminUsers({ tenants, isSuperAdmin, currentUserId }: AdminUsersP
                 <th style={headerStyle}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     Rol
-                    <span
-                      title="Beheerder: volledige toegang tot assistenten, integraties, webhooks en gebruikersbeheer. Medewerker: kan assistenten, integraties en kennisbronnen bekijken en bewerken, maar geen webhooks of gebruikers beheren."
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: 14, height: 14, borderRadius: '50%',
-                        border: '0.5px solid #94A3B8', color: '#94A3B8',
-                        fontSize: 9, fontWeight: 600, cursor: 'help',
-                      }}
-                    >?</span>
+                    <RoleHelp />
                   </span>
                 </th>
                 <th style={headerStyle}>Sinds</th>
