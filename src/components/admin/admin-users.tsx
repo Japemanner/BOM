@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Trash2, X, Loader2 } from 'lucide-react'
+import { Trash2, X, Loader2, Plus } from 'lucide-react'
 import { UserRole } from '@/types'
 
 interface Member {
@@ -48,6 +48,175 @@ const roleBadgeStyle: Record<string, React.CSSProperties> = {
     background: '#EFF6FF', color: '#1E40AF', fontSize: 11, fontWeight: 500,
     padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
   },
+}
+
+function CreateUserModal({
+  onClose,
+  onCreated,
+  showToast,
+}: {
+  onClose: () => void
+  onCreated: () => void
+  showToast: (msg: string, ok?: boolean) => void
+}) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<string>(UserRole.MEMBER)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      setError('Alle velden zijn verplicht')
+      return
+    }
+    if (password.length < 8) {
+      setError('Wachtwoord minimaal 8 tekens')
+      return
+    }
+    setError(null)
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, role }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        const errMsg = (data as { error?: string }).error ?? 'Gebruiker toevoegen mislukt'
+        showToast(errMsg, false)
+        setError(errMsg)
+        return
+      }
+      showToast('Gebruiker toegevoegd', true)
+      onCreated()
+      onClose()
+    } catch {
+      showToast('Netwerkfout — probeer opnieuw', false)
+      setError('Netwerkfout — probeer opnieuw')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(2px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#fff', borderRadius: 12, width: 420, maxWidth: '90vw',
+          padding: 24, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+        }}
+      >
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', margin: 0 }}>Gebruiker toevoegen</h3>
+
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 4 }}>Naam</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Volledige naam"
+              style={{
+                width: '100%', height: 34, padding: '0 10px', borderRadius: 7,
+                border: '0.5px solid #E2E8F0', fontSize: 13, outline: 'none',
+                fontFamily: 'inherit', color: '#0F172A', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 4 }}>E-mailadres</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="naam@bedrijf.nl"
+              style={{
+                width: '100%', height: 34, padding: '0 10px', borderRadius: 7,
+                border: '0.5px solid #E2E8F0', fontSize: 13, outline: 'none',
+                fontFamily: 'inherit', color: '#0F172A', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 4 }}>Wachtwoord</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimaal 8 tekens"
+              style={{
+                width: '100%', height: 34, padding: '0 10px', borderRadius: 7,
+                border: '0.5px solid #E2E8F0', fontSize: 13, outline: 'none',
+                fontFamily: 'inherit', color: '#0F172A', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 4 }}>Rol</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              style={{
+                width: '100%', height: 34, padding: '0 10px', borderRadius: 7,
+                border: '0.5px solid #E2E8F0', fontSize: 13, outline: 'none',
+                fontFamily: 'inherit', color: '#0F172A', background: '#fff',
+                boxSizing: 'border-box', cursor: 'pointer',
+              }}
+            >
+              <option value={UserRole.MEMBER}>Medewerker</option>
+              <option value={UserRole.ADMIN}>Beheerder</option>
+            </select>
+          </div>
+
+          {error && (
+            <p style={{ fontSize: 12, color: '#DC2626', margin: 0 }}>{error}</p>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+          <button
+            onClick={onClose}
+            style={{
+              height: 36, padding: '0 16px', borderRadius: 7,
+              border: '0.5px solid #E2E8F0', background: '#fff',
+              fontSize: 13, color: '#374151', cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Annuleren
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            style={{
+              height: 36, padding: '0 16px', borderRadius: 7,
+              border: 'none', background: '#1D9E75',
+              fontSize: 13, fontWeight: 500, color: '#fff', cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitting ? 0.6 : 1,
+              fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            {submitting && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+            Toevoegen
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ConfirmModal({
@@ -145,6 +314,7 @@ export function AdminUsers({ tenants, isSuperAdmin, currentUserId }: AdminUsersP
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ userId: string; tenantId: string; name: string } | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const showToast = useCallback((msg: string, ok = true) => {
     setToast({ msg, ok })
@@ -253,6 +423,14 @@ export function AdminUsers({ tenants, isSuperAdmin, currentUserId }: AdminUsersP
         />
       )}
 
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onCreated={loadMembers}
+          showToast={showToast}
+        />
+      )}
+
       {/* Tenant filter voor super admins */}
       {isSuperAdmin && tenants.length > 0 && (
         <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -274,6 +452,25 @@ export function AdminUsers({ tenants, isSuperAdmin, currentUserId }: AdminUsersP
           </select>
         </div>
       )}
+
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>
+          {members.length} gebruiker{members.length !== 1 ? 's' : ''}
+        </span>
+        <button
+          onClick={() => setShowCreate(true)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            height: 34, padding: '0 14px', borderRadius: 7,
+            border: 'none', background: '#1D9E75',
+            fontSize: 13, fontWeight: 500, color: '#fff', cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          <Plus size={14} />
+          Gebruiker toevoegen
+        </button>
+      </div>
 
       {/* Lijst */}
       <div className="bg-white rounded-lg border border-slate-100 overflow-hidden">
