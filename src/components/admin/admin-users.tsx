@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Trash2, X, Loader2, Plus } from 'lucide-react'
 import { UserRole } from '@/types'
 
@@ -54,11 +54,22 @@ const roleHelpText = 'Beheerder: volledige toegang tot assistenten, integraties,
 
 function RoleHelp() {
   const [show, setShow] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef<HTMLSpanElement>(null)
+
+  const handleEnter = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 })
+    }
+    setShow(true)
+  }
 
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
       <span
-        onMouseEnter={() => setShow(true)}
+        ref={triggerRef}
+        onMouseEnter={handleEnter}
         onMouseLeave={() => setShow(false)}
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -69,18 +80,21 @@ function RoleHelp() {
       >?</span>
       {show && (
         <span style={{
-          position: 'absolute',
-          bottom: 'calc(100% + 6px)',
-          left: '50%',
+          position: 'fixed',
+          top: pos.top,
+          left: pos.left,
           transform: 'translateX(-50%)',
-          background: '#0F172A',
-          color: '#fff',
+          background: '#fff',
+          color: '#0F172A',
           fontSize: 12,
-          padding: '8px 12px',
-          borderRadius: 6,
-          whiteSpace: 'nowrap',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 100,
+          padding: '10px 14px',
+          borderRadius: 8,
+          maxWidth: 280,
+          lineHeight: 1.5,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          border: '0.5px solid #E2E8F0',
+          zIndex: 9999,
+          pointerEvents: 'none',
         }}>
           {roleHelpText}
         </span>
