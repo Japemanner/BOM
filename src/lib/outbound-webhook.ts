@@ -44,6 +44,12 @@ export interface OutboundWebhookPayload {
   /** Format: {tenantId}-{runId}. Beide zijn UUIDs, elk 36 tekens. */
   traceId: string
   timestamp: string
+  /** Gekoppelde kennisbronnen met hun geïndexeerde document-filenames — voor RAG metadata-filter */
+  knowledgeSourceDocuments?: Array<{
+    knowledgeSourceId: string
+    knowledgeSourceName: string
+    filenames: string[]
+  }>
 }
 
 export interface OutboundWebhookResult {

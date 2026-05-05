@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, assistantRuns } from '@/db/schema/app'
+import { assistants, assistantRuns, assistantKnowledgeSources, knowledgeSources, ragDocuments } from '@/db/schema/app'
 import { tenants } from '@/db/schema/iam'
 import { users } from '@/db/schema/auth'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
 import { sendOutboundWebhook } from '@/lib/outbound-webhook'
@@ -129,6 +129,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Haal gekoppelde kennisbron-documenten op ────────────────────
+    step = 'fetch-knowledge-source-docs'
+    let knowledgeSourceDocuments: Array<{
+      knowledgeSourceId: string
+      knowledgeSourceName: string
+      filenames: string[]
+    }> = []
+    try {
+      const ksRows = await db
+        .select({
+          knowledgeSourceId: knowledgeSources.id,
+          knowledgeSourceName: knowledgeSources.name,
+          filename: ragDocuments.filename,
+        })
+        .from(assistantKnowledgeSources)
+        .innerJoin(knowledgeSources, eq(assistantKnowledgeSources.knowledgeSourceId, knowledgeSources.id))
+        .leftJoin(ragDocuments, and(
+          eq(ragDocuments.knowledgeSourceId, knowledgeSources.id),
+          eq(ragDocuments.status, 'indexed')
+        ))
+        .where(eq(assistantKnowledgeSources.assistantId, assistantId))
+
+      const grouped = new Map<string, { knowledgeSourceId: string; knowledgeSourceName: string; filenames: string[] }>()
+      for (const row of ksRows) {
+        if (!grouped.has(row.knowledgeSourceId)) {
+          grouped.set(row.knowledgeSourceId, {
+            knowledgeSourceId: row.knowledgeSourceId,
+            knowledgeSourceName: row.knowledgeSourceName,
+            filenames: [],
+          })
+        }
+        if (row.filename) grouped.get(row.knowledgeSourceId)!.filenames.push(row.filename)
+      }
+      knowledgeSourceDocuments = [...grouped.values()]
+    } catch {
+      // Niet kritisch — ga door zonder document-informatie
+    }
+
     // ── Decrypt secret ────────────────────────────────────────────────
     step = 'decrypt-webhook-secret'
     let secret: string
@@ -161,6 +199,7 @@ export async function POST(request: NextRequest) {
         userName,
         traceId,
         timestamp,
+        knowledgeSourceDocuments,
       })
     } catch (sendErr: unknown) {
       const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr)
