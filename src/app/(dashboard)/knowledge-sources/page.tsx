@@ -26,7 +26,11 @@ async function getKnowledgeSources(tenantId: string): Promise<KnowledgeSource[]>
   }))
 }
 
-export default async function KnowledgeSourcesPage() {
+export default async function KnowledgeSourcesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>
+}) {
   const result = await getSessionOutcome()
 
   if (!result.ok) {
@@ -35,6 +39,7 @@ export default async function KnowledgeSourcesPage() {
   }
 
   const sources = await getKnowledgeSources(result.tenantId)
+  const params = await searchParams
 
-  return <KnowledgeSourcesView sources={sources} />
+  return <KnowledgeSourcesView sources={sources} initialDetailId={params.id ?? null} />
 }

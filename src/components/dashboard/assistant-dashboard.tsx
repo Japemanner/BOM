@@ -31,6 +31,7 @@ interface Assistant {
   runsToday: number
   lastError?: string
   tags?: string[]
+  knowledgeSources?: { id: string; name: string }[]
 }
 
 interface ConfigForm {
@@ -395,7 +396,28 @@ function ChatWindow({
           </div>
           <div>
             <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: 0 }}>{assistant.name}</p>
-            <p style={{ fontSize: 11, color: '#9CA3AF', margin: 0 }}>{assistant.type}</p>
+            {assistant.knowledgeSources && assistant.knowledgeSources.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
+                {assistant.knowledgeSources.map((ks) => (
+                  <button
+                    key={ks.id}
+                    onClick={() => window.open(`/knowledge-sources?id=${ks.id}`, '_blank')}
+                    title={`Open ${ks.name}`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      height: 20, padding: '0 7px', borderRadius: 4,
+                      background: '#ECFDF5', border: `0.5px solid ${TEAL}33`,
+                      fontSize: 10, color: TEAL, cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {ks.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: 11, color: '#9CA3AF', margin: 0 }}>{assistant.type}</p>
+            )}
           </div>
         </div>
         <button

@@ -4,7 +4,7 @@ import type { MetricsData } from '@/components/dashboard/metrics-strip'
 import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
 import { db } from '@/db'
-import { assistants, assistantRuns, reviewItems } from '@/db/schema/app'
+import { assistants, assistantRuns, reviewItems, assistantKnowledgeSources, knowledgeSources } from '@/db/schema/app'
 import { eq, and, gte, count } from 'drizzle-orm'
 
 interface AssistantRow {
@@ -16,6 +16,7 @@ interface AssistantRow {
   runsToday: number
   lastError?: string
   canUploadFiles: boolean
+  knowledgeSources: { id: string; name: string }[]
 }
 
 async function getMetrics(tenantId: string): Promise<MetricsData> {
@@ -77,6 +78,22 @@ async function getAssistants(tenantId: string): Promise<AssistantRow[]> {
 
   const countMap = new Map(runCounts.map((r) => [r.assistantId, Number(r.count)]))
 
+  const ksRows = await db
+    .select({
+      assistantId: assistantKnowledgeSources.assistantId,
+      knowledgeSourceId: knowledgeSources.id,
+      knowledgeSourceName: knowledgeSources.name,
+    })
+    .from(assistantKnowledgeSources)
+    .innerJoin(knowledgeSources, eq(assistantKnowledgeSources.knowledgeSourceId, knowledgeSources.id))
+    .where(eq(knowledgeSources.tenantId, tenantId))
+
+  const ksMap = new Map<string, { id: string; name: string }[]>()
+  for (const row of ksRows) {
+    if (!ksMap.has(row.assistantId)) ksMap.set(row.assistantId, [])
+    ksMap.get(row.assistantId)!.push({ id: row.knowledgeSourceId, name: row.knowledgeSourceName })
+  }
+
   return rows.map((a) => {
     const config = (a.config ?? {}) as Record<string, unknown>
     return {
@@ -88,6 +105,7 @@ async function getAssistants(tenantId: string): Promise<AssistantRow[]> {
       runsToday: countMap.get(a.id) ?? 0,
       lastError: a.status === 'error' ? 'Verbindingsfout' : undefined,
       canUploadFiles: config.canUploadFiles === true,
+      knowledgeSources: ksMap.get(a.id) ?? [],
     }
   })
 }

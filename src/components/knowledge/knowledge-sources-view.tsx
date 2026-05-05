@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Plus, Database, Loader2, Trash2, Edit3,
   Upload, X, Check, AlertCircle,
@@ -268,6 +268,7 @@ function DetailPanel({
 
 interface KnowledgeSourcesViewProps {
   sources: KnowledgeSource[]
+  initialDetailId?: string | null
 }
 
 const ALLOWED_TYPES = [
@@ -276,7 +277,7 @@ const ALLOWED_TYPES = [
   'text/plain',
 ]
 
-export function KnowledgeSourcesView({ sources }: KnowledgeSourcesViewProps) {
+export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSourcesViewProps) {
   const [list, setList] = useState(sources)
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [editName, setEditName] = useState('')
@@ -286,6 +287,10 @@ export function KnowledgeSourcesView({ sources }: KnowledgeSourcesViewProps) {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (initialDetailId) setDetailId(initialDetailId)
+  }, [initialDetailId])
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
