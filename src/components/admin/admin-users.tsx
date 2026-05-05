@@ -166,7 +166,18 @@ function CreateUserModal({
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#374151', marginBottom: 4 }}>Rol</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: '#374151' }}>Rol</span>
+              <span
+                title="Beheerder: volledige toegang tot assistenten, integraties, webhooks en gebruikersbeheer. Medewerker: kan assistenten, integraties en kennisbronnen bekijken en bewerken, maar geen webhooks of gebruikers beheren."
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 15, height: 15, borderRadius: '50%',
+                  border: '0.5px solid #94A3B8', color: '#94A3B8',
+                  fontSize: 9, fontWeight: 600, cursor: 'help',
+                }}
+              >?</span>
+            </div>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
@@ -491,7 +502,20 @@ export function AdminUsers({ tenants, isSuperAdmin, currentUserId }: AdminUsersP
                 {isSuperAdmin && !selectedTenant && (
                   <th style={headerStyle}>Organisatie</th>
                 )}
-                <th style={headerStyle}>Rol</th>
+                <th style={headerStyle}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    Rol
+                    <span
+                      title="Beheerder: volledige toegang tot assistenten, integraties, webhooks en gebruikersbeheer. Medewerker: kan assistenten, integraties en kennisbronnen bekijken en bewerken, maar geen webhooks of gebruikers beheren."
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 14, height: 14, borderRadius: '50%',
+                        border: '0.5px solid #94A3B8', color: '#94A3B8',
+                        fontSize: 9, fontWeight: 600, cursor: 'help',
+                      }}
+                    >?</span>
+                  </span>
+                </th>
                 <th style={headerStyle}>Sinds</th>
                 <th style={{ ...headerStyle, width: 140 }}>Acties</th>
               </tr>
