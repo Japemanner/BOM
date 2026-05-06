@@ -111,6 +111,7 @@ export async function sendOutboundWebhook(
 export interface RagWebhookPayload {
   documentId: string
   s3Key: string
+  downloadUrl: string
   filename: string
   tenantId: string
   assistantId?: string

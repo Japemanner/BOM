@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 import { sendRagWebhook } from '@/lib/outbound-webhook'
 import { decrypt } from '@/lib/crypto'
-import { deleteS3Object } from '@/lib/s3'
+import { deleteS3Object, getPresignedDownloadUrl } from '@/lib/s3'
 import { auth } from '@/lib/auth'
 import { canDo } from '@/lib/permissions'
 import { headers } from 'next/headers'
@@ -168,12 +168,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    step = 'download-url'
+    const downloadUrl = await getPresignedDownloadUrl(doc.s3Key, 3600)
+
     step = 'trigger-n8n'
     const input = doc.runInput as { uploadedBy?: string } ?? {}
     try {
       await sendRagWebhook(webhookUrl, secret, {
         documentId,
         s3Key: doc.s3Key,
+        downloadUrl,
         filename: doc.filename,
         tenantId: doc.tenantId,
         assistantId: doc.assistantId ?? undefined,

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, S3ClientConfig } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, S3ClientConfig } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 const REQUIRED_VARS = ['S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET'] as const
@@ -62,6 +62,23 @@ export async function getPresignedUploadUrl(
     Bucket: BUCKET,
     Key: key,
     ContentType: contentType,
+  })
+
+  return getSignedUrl(client, command, { expiresIn: expiresInSeconds })
+}
+
+/**
+ * Genereer een presigned GET URL voor download uit S3.
+ * N8N gebruikt deze URL om het geüploade document te downloaden voor vectorisatie.
+ */
+export async function getPresignedDownloadUrl(
+  key: string,
+  expiresInSeconds = 3600
+): Promise<string> {
+  validateS3Config()
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
   })
 
   return getSignedUrl(client, command, { expiresIn: expiresInSeconds })
