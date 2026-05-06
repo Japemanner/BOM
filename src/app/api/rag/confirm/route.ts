@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
     let resolvedFrom: string | null = null
 
     // Tier 1: Knowledge source config (als document aan een KS hangt)
+    console.error(`[RAG-DEBUG] doc.knowledgeSourceId=${doc.knowledgeSourceId} doc.assistantId=${doc.assistantId}`)
     if (!webhookUrl && doc.knowledgeSourceId) {
       const [ks] = await db
         .select({
@@ -87,13 +88,16 @@ export async function POST(request: NextRequest) {
         .where(eq(knowledgeSources.id, doc.knowledgeSourceId))
         .limit(1)
 
+      console.error(`[RAG-DEBUG] ks found=${!!ks} rawConfig=${JSON.stringify(ks?.config)}`)
       if (ks) {
         const cfg = ks.config as { webhookUrl?: string; webhookTokenEncrypted?: string } | null
         knowledgeSourceName = ks.name
+        console.error(`[RAG-DEBUG] cfg.webhookUrl=${cfg?.webhookUrl ?? 'MISSING'} cfg.webhookTokenEncrypted=${cfg?.webhookTokenEncrypted ? 'PRESENT' : 'MISSING'}`)
         if (cfg?.webhookUrl && cfg?.webhookTokenEncrypted) {
           webhookUrl = cfg.webhookUrl
           webhookTokenEncrypted = cfg.webhookTokenEncrypted
           resolvedFrom = 'knowledge_source'
+          console.error(`[RAG-DEBUG] RESOLVED from knowledge_source url=${webhookUrl}`)
         }
       }
     }
