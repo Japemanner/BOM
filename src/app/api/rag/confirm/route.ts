@@ -69,44 +69,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Eerst globale RAG integratie checken, daarna fallback naar per-KS config
+    // Prioriteit: document-specifieke config eerst, globale RAG als laatste fallback
     let webhookUrl: string | null = null
     let webhookTokenEncrypted: string | null = null
     let assistantName: string | undefined
     let knowledgeSourceName: string | undefined
+    let resolvedFrom: string | null = null
 
-    const [globalRag] = await db
-      .select({ config: integrations.config })
-      .from(integrations)
-      .where(and(eq(integrations.tenantId, doc.tenantId), eq(integrations.type, 'rag'), eq(integrations.status, 'active')))
-      .limit(1)
-
-    if (globalRag) {
-      const cfg = globalRag.config as { webhookUrl?: string; webhookTokenEncrypted?: string } | null
-      if (cfg?.webhookUrl && cfg?.webhookTokenEncrypted) {
-        webhookUrl = cfg.webhookUrl
-        webhookTokenEncrypted = cfg.webhookTokenEncrypted
-      }
-    }
-
-    if (!webhookUrl && doc.assistantId) {
-      const [assistant] = await db
-        .select({
-          name: assistants.name,
-          webhookUrl: assistants.webhookUrl,
-          webhookTokenEncrypted: assistants.webhookTokenEncrypted,
-        })
-        .from(assistants)
-        .where(eq(assistants.id, doc.assistantId))
-        .limit(1)
-
-      if (assistant) {
-        webhookUrl = assistant.webhookUrl
-        webhookTokenEncrypted = assistant.webhookTokenEncrypted
-        assistantName = assistant.name
-      }
-    }
-
+    // Tier 1: Knowledge source config (als document aan een KS hangt)
     if (!webhookUrl && doc.knowledgeSourceId) {
       const [ks] = await db
         .select({
@@ -120,8 +90,49 @@ export async function POST(request: NextRequest) {
       if (ks) {
         const cfg = ks.config as { webhookUrl?: string; webhookTokenEncrypted?: string } | null
         knowledgeSourceName = ks.name
-        webhookUrl = cfg?.webhookUrl ?? null
-        webhookTokenEncrypted = cfg?.webhookTokenEncrypted ?? null
+        if (cfg?.webhookUrl && cfg?.webhookTokenEncrypted) {
+          webhookUrl = cfg.webhookUrl
+          webhookTokenEncrypted = cfg.webhookTokenEncrypted
+          resolvedFrom = 'knowledge_source'
+        }
+      }
+    }
+
+    // Tier 2: Assistant webhook (als document aan een assistant hangt)
+    if (!webhookUrl && doc.assistantId) {
+      const [assistant] = await db
+        .select({
+          name: assistants.name,
+          webhookUrl: assistants.webhookUrl,
+          webhookTokenEncrypted: assistants.webhookTokenEncrypted,
+        })
+        .from(assistants)
+        .where(eq(assistants.id, doc.assistantId))
+        .limit(1)
+
+      if (assistant && assistant.webhookUrl && assistant.webhookTokenEncrypted) {
+        webhookUrl = assistant.webhookUrl
+        webhookTokenEncrypted = assistant.webhookTokenEncrypted
+        assistantName = assistant.name
+        resolvedFrom = 'assistant'
+      }
+    }
+
+    // Tier 3: Globale RAG integratie (laatste fallback)
+    if (!webhookUrl) {
+      const [globalRag] = await db
+        .select({ config: integrations.config })
+        .from(integrations)
+        .where(and(eq(integrations.tenantId, doc.tenantId), eq(integrations.type, 'rag'), eq(integrations.status, 'active')))
+        .limit(1)
+
+      if (globalRag) {
+        const cfg = globalRag.config as { webhookUrl?: string; webhookTokenEncrypted?: string } | null
+        if (cfg?.webhookUrl && cfg?.webhookTokenEncrypted) {
+          webhookUrl = cfg.webhookUrl
+          webhookTokenEncrypted = cfg.webhookTokenEncrypted
+          resolvedFrom = 'global_rag_integration'
+        }
       }
     }
 
@@ -174,6 +185,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (sendErr: unknown) {
       const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr)
+      console.error(`[RAG-WEBHOOK-FAIL] resolvedFrom=${resolvedFrom} url=${webhookUrl} error=${errMsg}`)
       await db
         .update(ragDocuments)
         .set({ status: 'failed', errorMessage: `N8N trigger mislukt: ${errMsg}` })
