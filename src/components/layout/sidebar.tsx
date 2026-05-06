@@ -11,7 +11,15 @@ import {
   Zap,
   Shield,
   Database,
+  LogOut,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
 const TEAL = '#1D9E75'
 
@@ -268,51 +276,79 @@ export function Sidebar({
       </div>
 
       {/* ── Gebruikerchip ── */}
-      <div
-        style={{
-          padding: '12px 14px',
-          borderTop: '0.5px solid #EAECEF',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          flexShrink: 0,
-          cursor: 'pointer',
-        }}
-      >
-        <div
+      <DropdownMenu>
+        <DropdownMenuTrigger
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: TEAL,
-            color: '#fff',
-            fontSize: 11,
-            fontWeight: 500,
+            padding: '12px 14px',
+            borderTop: '0.5px solid #EAECEF',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
+            gap: 10,
             flexShrink: 0,
+            cursor: 'pointer',
+            background: 'none',
+            border: 'none',
+            borderLeft: 'none',
+            borderRight: 'none',
+            borderBottom: 'none',
+            width: '100%',
+            fontFamily: 'inherit',
+            textAlign: 'left',
           }}
         >
-          {initials}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p
+          <div
             style={{
-              fontSize: 12,
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: TEAL,
+              color: '#fff',
+              fontSize: 11,
               fontWeight: 500,
-              color: '#0F172A',
-              margin: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
-            {userName}
-          </p>
-          <p style={{ fontSize: 10, color: '#9CA3AF', margin: 0 }}>{userPlan}</p>
-        </div>
-      </div>
+            {initials}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: '#0F172A',
+                margin: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {userName}
+            </p>
+            <p style={{ fontSize: 10, color: '#9CA3AF', margin: 0 }}>{userPlan}</p>
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" sideOffset={8} align="start" style={{ minWidth: 180 }}>
+          <div style={{ padding: '8px 10px', borderBottom: '0.5px solid #EAECEF' }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: '#0F172A', margin: '0 0 2px' }}>
+              {userName}
+            </p>
+            <p style={{ fontSize: 11, color: '#9CA3AF', margin: 0 }}>{userPlan}</p>
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => {
+              window.location.href = '/api/auth/sign-out'
+            }}
+            style={{ cursor: 'pointer' }}
+          >
+            <LogOut size={14} style={{ color: '#6B7280' }} />
+            <span>Uitloggen</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </aside>
   )
 }
