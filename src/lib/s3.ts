@@ -13,7 +13,7 @@ function collectMissingVars(): string[] {
 
 const missing = collectMissingVars()
 
-function buildS3Client(): S3Client {
+export function buildS3Client(): S3Client {
   if (missing.length > 0) {
     // Client wordt lazy aangemaakt — fout pas bij aanroep zodat NextJS niet crasht bij opstarten zonder env
     // maar we loggen duidelijk bij de eerste S3 interactie
@@ -33,7 +33,7 @@ function buildS3Client(): S3Client {
 }
 
 const client = buildS3Client()
-const BUCKET = process.env.S3_BUCKET ?? ''
+export const BUCKET = process.env.S3_BUCKET ?? ''
 
 /**
  * Runtime-validatie van S3 configuratie.

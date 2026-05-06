@@ -402,15 +402,24 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
         throw new Error((err as { error: string }).error ?? 'Upload URL aanvraag mislukt')
       }
 
-      const { uploadUrl, documentId } = await urlRes.json() as { uploadUrl: string; documentId: string }
+      const { uploadUrl, documentId, s3Key } = await urlRes.json() as { uploadUrl: string; documentId: string; s3Key: string }
+      void uploadUrl
 
-      // 2. Upload to S3
-      const putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
+      // 2. Upload via proxy (omzeilt CORS op S3 bucket)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('documentId', documentId)
+      formData.append('s3Key', s3Key)
+      formData.append('contentType', file.type)
+
+      const putRes = await fetch('/api/rag/proxy-upload', {
+        method: 'POST',
+        body: formData,
       })
-      if (!putRes.ok) throw new Error('S3 upload mislukt')
+      if (!putRes.ok) {
+        const err = await putRes.json().catch(() => ({ error: 'Proxy upload mislukt' }))
+        throw new Error((err as { error: string }).error ?? 'Proxy upload mislukt')
+      }
 
       // 3. Confirm upload
       const confirmRes = await fetch('/api/rag/confirm', {
