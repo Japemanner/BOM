@@ -24,11 +24,12 @@ const inputStyle: React.CSSProperties = {
   fontFamily: 'inherit', color: '#0F172A', background: '#fff',
 }
 
-function ModalField({ label, children }: { label: string; children: React.ReactNode }) {
+function ModalField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label style={{ fontSize: 11, fontWeight: 500, color: '#374151', display: 'block', marginBottom: 4 }}>
         {label}
+        {hint && <span style={{ fontWeight: 400, color: '#9CA3AF' }}>{hint}</span>}
       </label>
       {children}
     </div>
@@ -39,8 +40,12 @@ function EditModal({
   isNew,
   name,
   description,
+  webhookUrl,
+  webhookToken,
   onNameChange,
   onDescriptionChange,
+  onWebhookUrlChange,
+  onWebhookTokenChange,
   onSave,
   onClose,
   isSaving,
@@ -48,8 +53,12 @@ function EditModal({
   isNew: boolean
   name: string
   description: string
+  webhookUrl: string
+  webhookToken: string
   onNameChange: (v: string) => void
   onDescriptionChange: (v: string) => void
+  onWebhookUrlChange: (v: string) => void
+  onWebhookTokenChange: (v: string) => void
   onSave: () => void
   onClose: () => void
   isSaving: boolean
@@ -83,6 +92,14 @@ function EditModal({
           <ModalField label="Beschrijving">
             <input value={description} onChange={(e) => onDescriptionChange(e.target.value)}
               placeholder="Korte omschrijving" style={inputStyle} />
+          </ModalField>
+          <ModalField label="Webhook URL" hint=" — n8n-webhook voor vectorisatie">
+            <input value={webhookUrl} onChange={(e) => onWebhookUrlChange(e.target.value)}
+              placeholder="https://n8n.jouwdomein.nl/webhook/rag-vectorize" style={inputStyle} />
+          </ModalField>
+          <ModalField label="Webhook Secret" hint=" — JWT-secret voor beveiligde communicatie">
+            <input value={webhookToken} onChange={(e) => onWebhookTokenChange(e.target.value)}
+              placeholder="minimaal 8 tekens" type="password" style={inputStyle} />
           </ModalField>
         </div>
 
@@ -282,6 +299,8 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editWebhookUrl, setEditWebhookUrl] = useState('')
+  const [editWebhookToken, setEditWebhookToken] = useState('')
   const [loading, setLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -300,12 +319,17 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
   const openNew = () => {
     setEditName('')
     setEditDescription('')
+    setEditWebhookUrl('')
+    setEditWebhookToken('')
     setEditingId('new')
   }
 
   const openEdit = (s: KnowledgeSource) => {
     setEditName(s.name)
     setEditDescription(s.description)
+    const cfg = s.config as { webhookUrl?: string; webhookTokenEncrypted?: string }
+    setEditWebhookUrl(cfg?.webhookUrl ?? '')
+    setEditWebhookToken('')
     setEditingId(s.id)
   }
 
@@ -327,10 +351,17 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
         setList((prev) => [created, ...prev])
         showToast(`${created.name} aangemaakt`)
       } else if (editingId) {
+        const patchBody: Record<string, unknown> = { name: editName, description: editDescription }
+        if (editWebhookUrl.trim()) {
+          patchBody.config = {
+            webhookUrl: editWebhookUrl.trim(),
+            webhookToken: editWebhookToken || undefined,
+          }
+        }
         const res = await fetch(`/api/knowledge-sources/${editingId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: editName, description: editDescription }),
+          body: JSON.stringify(patchBody),
         })
         if (!res.ok) {
           const err = await extractApiError(res)
@@ -615,8 +646,12 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
           isNew={editingId === 'new'}
           name={editName}
           description={editDescription}
+          webhookUrl={editWebhookUrl}
+          webhookToken={editWebhookToken}
           onNameChange={setEditName}
           onDescriptionChange={setEditDescription}
+          onWebhookUrlChange={setEditWebhookUrl}
+          onWebhookTokenChange={setEditWebhookToken}
           onSave={handleSave}
           onClose={() => setEditingId(null)}
           isSaving={loading === 'save'}

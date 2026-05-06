@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { canDo } from '@/lib/permissions'
 import { getSessionContext } from '@/lib/session'
+import { encrypt } from '@/lib/crypto'
 
 export async function GET(
   _request: NextRequest,
@@ -69,6 +70,18 @@ export async function PATCH(
     const updateData: Record<string, unknown> = {
       ...parsed.data,
       updatedAt: new Date(),
+    }
+
+    // Versleutel webhook token als die in de config zit
+    if (updateData.config && typeof updateData.config === 'object') {
+      const cfg = updateData.config as Record<string, unknown>
+      if (typeof cfg.webhookToken === 'string' && cfg.webhookToken.length > 0) {
+        cfg.webhookTokenEncrypted = encrypt(cfg.webhookToken)
+        delete cfg.webhookToken
+      } else if (cfg.webhookToken === undefined) {
+        delete cfg.webhookToken
+      }
+      updateData.config = cfg
     }
 
     const [updated] = await db
