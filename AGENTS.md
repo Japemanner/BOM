@@ -210,3 +210,26 @@ Niet zelf goedkeuren zonder deze check. Score onder threshold → revise before 
 - Knowledge base: `/knowledge/INDEX.md` — per domein feiten, hypotheses, bevestigde regels
 - Decision journal: `/decisions/YYYY-MM-DD-{topic}.md` — architectuur- en ontwerpbeslissingen
 - Raadpleeg altijd bestaande decisions voordat je een beslissing neemt die verder gaat dan vandaag
+
+## L-GEVITY Architecture Skills
+
+Zeven engineering skills staan in `.claude/skills/l-gevity/`. Raadpleeg de
+bijbehorende `SKILL.md` bij de genoemde triggers. De skills zijn gerangschikt
+op prioriteit voor dit project.
+
+| Skill | Pad | Wanneer gebruiken |
+|-------|-----|-------------------|
+| `architecture-as-code-javascript` | `.claude/skills/l-gevity/architecture-as-code-javascript/SKILL.md` | Import-boundary regels opzetten of debuggen; `rbac.*` enforcement via eslint-plugin-boundaries |
+| `geometric-architecture` | `.claude/skills/l-gevity/geometric-architecture/SKILL.md` | Nieuwe module plaatsen in de lagenstructuur; Z-skip of cross-domain coupling diagnosticeren |
+| `defect-shift-left` | `.claude/skills/l-gevity/defect-shift-left/SKILL.md` | Beslissen waar een check thuishoort (type, lint, test, CI); pipeline auditen |
+| `functionality-complexity-tradeoff` | `.claude/skills/l-gevity/functionality-complexity-tradeoff/SKILL.md` | Afwegen of een feature gebouwd, uitgesteld of verwijderd moet worden; dead-code audit |
+| `architecture-guidelines` | `.claude/skills/l-gevity/architecture-guidelines/SKILL.md` | Nieuwe module/abstractie introduceren; SOLID-review; YAGNI-check |
+| `structural-simplification` | `.claude/skills/l-gevity/structural-simplification/SKILL.md` | Refactoring evalueren; complexiteit voor/na vergelijken op D/K/P/n assen |
+| `system-optimization` | `.claude/skills/l-gevity/system-optimization/SKILL.md` | Waste/bottleneck scan over CI, workflow, code of testing; ToC-analyse |
+
+### Automatisch toepassen
+
+- Bij elke **nieuwe API route of module**: controleer `architecture-guidelines` + `geometric-architecture`.
+- Bij elke **nieuwe feature request**: run `functionality-complexity-tradeoff` noodzaak-gate eerst.
+- Bij elke **refactoring**: vergelijk met `structural-simplification` (ΔD, ΔK, ΔP, Δn).
+- Bij **architectuurschending** gemeld in review: zie `defect-shift-left` voor de juiste pipeline-plek.
