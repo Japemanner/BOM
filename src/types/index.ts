@@ -104,6 +104,28 @@ export interface KnowledgeSource {
   updatedAt: string
 }
 
+export const RagDocumentStatus = {
+  UPLOADED: 'uploaded',
+  PROCESSING: 'processing',
+  INDEXED: 'indexed',
+  FAILED: 'failed',
+} as const
+export type RagDocumentStatus = (typeof RagDocumentStatus)[keyof typeof RagDocumentStatus]
+
+export interface RagDocument {
+  id: string
+  tenantId: string
+  assistantId: string | null
+  knowledgeSourceId: string | null
+  filename: string
+  s3Key: string
+  status: RagDocumentStatus
+  metadata: Record<string, unknown>
+  createdAt: string
+  processedAt: string | null
+  errorMessage: string | null
+}
+
 export const PermissionResource = {
   ASSISTANTS: 'assistants',
   INTEGRATIONS: 'integrations',

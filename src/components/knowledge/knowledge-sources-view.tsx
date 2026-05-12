@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Plus, Database, Loader2, Trash2, Edit3,
-  Upload, X, Check, AlertCircle,
+  Upload, X, Check, AlertCircle, File,
 } from 'lucide-react'
 import { extractApiError } from '@/lib/logger'
-import type { KnowledgeSource } from '@/types'
+import type { KnowledgeSource, RagDocument } from '@/types'
 
 const TEAL = '#1D9E75'
 
@@ -112,6 +112,13 @@ function EditModal({
   )
 }
 
+const DOC_STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
+  uploaded:   { label: 'Geupload',   color: '#9CA3AF', bg: '#F3F4F6' },
+  processing: { label: 'Verwerken',  color: '#F59E0B', bg: '#FFFBEB' },
+  indexed:    { label: 'Geindexeerd', color: TEAL,      bg: '#ECFDF5' },
+  failed:     { label: 'Mislukt',    color: '#EF4444', bg: '#FEF2F2' },
+}
+
 function DetailPanel({
   source,
   onClose,
@@ -119,6 +126,7 @@ function DetailPanel({
   onUpload,
   uploadStatus,
   uploadError,
+  refreshKey,
 }: {
   source: KnowledgeSource
   onClose: () => void
@@ -126,9 +134,41 @@ function DetailPanel({
   onUpload: (file: File) => void
   uploadStatus: 'idle' | 'uploading' | 'error'
   uploadError: string | null
+  refreshKey: number
 }) {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [documents, setDocuments] = useState<RagDocument[]>([])
+  const [docsLoading, setDocsLoading] = useState(false)
+
+  const hasPendingDoc = documents.some((d) => d.status === 'uploaded' || d.status === 'processing')
+
+  const fetchDocuments = useCallback(async () => {
+    setDocsLoading(true)
+    try {
+      const res = await fetch(`/api/knowledge-sources/${source.id}/documents`)
+      if (res.ok) {
+        const data = (await res.json()) as RagDocument[]
+        setDocuments(data)
+      }
+    } catch {
+      // stil
+    } finally {
+      setDocsLoading(false)
+    }
+  }, [source.id])
+
+  useEffect(() => {
+    void fetchDocuments()
+  }, [fetchDocuments, refreshKey])
+
+  useEffect(() => {
+    if (!hasPendingDoc) return
+    const interval = setInterval(() => {
+      void fetchDocuments()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [hasPendingDoc, fetchDocuments])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -233,19 +273,61 @@ function DetailPanel({
             )}
           </div>
 
-          {/* Placeholder voor documentenlijst */}
+          {/* Documentenlijst */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
               Documenten
             </p>
-            {source.documentCount === 0 ? (
+            {docsLoading && documents.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', gap: 8 }}>
+                <Loader2 size={12} color="#9CA3AF" style={{ animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: 12, color: '#9CA3AF' }}>Laden...</span>
+              </div>
+            ) : documents.length === 0 ? (
               <p style={{ fontSize: 12, color: '#C4C9D4', textAlign: 'center', padding: '16px 0' }}>
                 Nog geen documenten geupload
               </p>
             ) : (
-              <p style={{ fontSize: 12, color: '#9CA3AF', padding: '8px 0' }}>
-                {source.documentCount} document{source.documentCount !== 1 ? 'en' : ''} geindexeerd
-              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {documents.map((doc) => {
+                  const docMeta = DOC_STATUS_META[doc.status] ?? DOC_STATUS_META['uploaded']!
+                  return (
+                    <div
+                      key={doc.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '8px 10px',
+                        borderBottom: '0.5px solid #F1F5F9',
+                      }}
+                    >
+                      <File size={14} color="#9CA3AF" style={{ flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{
+                          fontSize: 12, color: '#0F172A', margin: 0,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {doc.filename}
+                        </p>
+                        {doc.status === 'failed' && doc.errorMessage && (
+                          <p style={{ fontSize: 11, color: '#EF4444', margin: '2px 0 0' }}>
+                            {doc.errorMessage}
+                          </p>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: 10, fontWeight: 500,
+                        color: docMeta.color, background: docMeta.bg,
+                        padding: '2px 7px', borderRadius: 5,
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        flexShrink: 0,
+                      }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: docMeta.color }} />
+                        {docMeta.label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -287,6 +369,7 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
   const [detailId, setDetailId] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'error'>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0)
 
   useEffect(() => {
     if (initialDetailId) setDetailId(initialDetailId)
@@ -439,6 +522,7 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
           : s
       ))
       showToast(`${file.name} wordt verwerkt`)
+      setDetailRefreshKey((k) => k + 1)
 
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -632,6 +716,7 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
           onUpload={handleUpload}
           uploadStatus={uploadStatus}
           uploadError={uploadError}
+          refreshKey={detailRefreshKey}
         />
       )}
 
