@@ -16,11 +16,22 @@ export async function GET() {
   }
 
   try {
-    const result = await db
+    const raw = await db
       .select()
       .from(knowledgeSources)
       .where(eq(knowledgeSources.tenantId, tenantId))
       .orderBy(desc(knowledgeSources.createdAt))
+
+    const result = raw.map((r) => {
+      const cfg = r.config as Record<string, unknown>
+      return {
+        ...r,
+        config: {
+          webhookUrl: cfg.webhookUrl ?? null,
+          hasToken: !!cfg.webhookTokenEncrypted,
+        },
+      }
+    })
 
     return NextResponse.json(result)
   } catch (error) {

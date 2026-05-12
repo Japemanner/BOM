@@ -90,7 +90,7 @@ export async function PATCH(
 
     const existingCfg = (current.config ?? {}) as Record<string, unknown>
 
-    let mergedConfig: Record<string, unknown> = { ...existingCfg }
+    const mergedConfig: Record<string, unknown> = { ...existingCfg }
 
     if (parsed.data.config) {
       const { webhookUrl, webhookToken } = parsed.data.config

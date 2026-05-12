@@ -99,7 +99,7 @@ export interface KnowledgeSource {
   description: string
   status: KnowledgeSourceStatus
   documentCount: number
-  config: Record<string, unknown>
+  config: { webhookUrl: string | null; hasToken: boolean }
   createdAt: string
   updatedAt: string
 }

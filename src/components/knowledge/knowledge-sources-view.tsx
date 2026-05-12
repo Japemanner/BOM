@@ -39,8 +39,12 @@ function EditModal({
   isNew,
   name,
   description,
+  webhookUrl,
+  webhookToken,
   onNameChange,
   onDescriptionChange,
+  onWebhookUrlChange,
+  onWebhookTokenChange,
   onSave,
   onClose,
   isSaving,
@@ -48,8 +52,12 @@ function EditModal({
   isNew: boolean
   name: string
   description: string
+  webhookUrl: string
+  webhookToken: string
   onNameChange: (v: string) => void
   onDescriptionChange: (v: string) => void
+  onWebhookUrlChange: (v: string) => void
+  onWebhookTokenChange: (v: string) => void
   onSave: () => void
   onClose: () => void
   isSaving: boolean
@@ -84,6 +92,28 @@ function EditModal({
             <input value={description} onChange={(e) => onDescriptionChange(e.target.value)}
               placeholder="Korte omschrijving" style={inputStyle} />
           </ModalField>
+          {!isNew && (
+            <>
+              <hr style={{ border: 'none', borderTop: '0.5px solid #F1F5F9', margin: 0 }} />
+              <ModalField label="N8N Webhook URL">
+                <input
+                  value={webhookUrl}
+                  onChange={(e) => onWebhookUrlChange(e.target.value)}
+                  placeholder="https://n8n.example.com/webhook/..."
+                  style={inputStyle}
+                />
+              </ModalField>
+              <ModalField label="Webhook Token">
+                <input
+                  type="password"
+                  value={webhookToken}
+                  onChange={(e) => onWebhookTokenChange(e.target.value)}
+                  placeholder="Token invullen om te wijzigen"
+                  style={inputStyle}
+                />
+              </ModalField>
+            </>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '12px 20px', borderTop: '0.5px solid #F1F5F9' }}>
@@ -369,6 +399,8 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editWebhookUrl, setEditWebhookUrl] = useState('')
+  const [editWebhookToken, setEditWebhookToken] = useState('')
   const [loading, setLoading] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -388,12 +420,16 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
   const openNew = () => {
     setEditName('')
     setEditDescription('')
+    setEditWebhookUrl('')
+    setEditWebhookToken('')
     setEditingId('new')
   }
 
   const openEdit = (s: KnowledgeSource) => {
     setEditName(s.name)
     setEditDescription(s.description)
+    setEditWebhookUrl(s.config.webhookUrl ?? '')
+    setEditWebhookToken('')
     setEditingId(s.id)
   }
 
@@ -415,17 +451,25 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
         setList((prev) => [created, ...prev])
         showToast(`${created.name} aangemaakt`)
       } else if (editingId) {
+        const config: Record<string, string> = {}
+        if (editWebhookUrl) config.webhookUrl = editWebhookUrl
+        if (editWebhookToken) config.webhookToken = editWebhookToken
+
+        const patchBody: Record<string, unknown> = { name: editName, description: editDescription }
+        if (Object.keys(config).length > 0) patchBody.config = config
+
         const res = await fetch(`/api/knowledge-sources/${editingId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: editName, description: editDescription }),
+          body: JSON.stringify(patchBody),
         })
         if (!res.ok) {
           const err = await extractApiError(res)
           throw new Error(err)
         }
+        const updated = await res.json() as KnowledgeSource
         setList((prev) => prev.map((s) =>
-          s.id === editingId ? { ...s, name: editName, description: editDescription } : s
+          s.id === editingId ? { ...s, name: editName, description: editDescription, config: updated.config } : s
         ))
         showToast(`${editName} opgeslagen`)
       }
@@ -704,8 +748,12 @@ export function KnowledgeSourcesView({ sources, initialDetailId }: KnowledgeSour
           isNew={editingId === 'new'}
           name={editName}
           description={editDescription}
+          webhookUrl={editWebhookUrl}
+          webhookToken={editWebhookToken}
           onNameChange={setEditName}
           onDescriptionChange={setEditDescription}
+          onWebhookUrlChange={setEditWebhookUrl}
+          onWebhookTokenChange={setEditWebhookToken}
           onSave={handleSave}
           onClose={() => setEditingId(null)}
           isSaving={loading === 'save'}

@@ -13,17 +13,23 @@ async function getKnowledgeSources(tenantId: string): Promise<KnowledgeSource[]>
     .where(eq(knowledgeSources.tenantId, tenantId))
     .orderBy(desc(knowledgeSources.createdAt))
 
-  return rows.map((r) => ({
-    id: r.id,
-    tenantId: r.tenantId,
-    name: r.name,
-    description: r.description,
-    status: r.status as KnowledgeSource['status'],
-    documentCount: r.documentCount,
-    config: r.config as Record<string, unknown>,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }))
+  return rows.map((r) => {
+    const cfg = r.config as Record<string, unknown>
+    return {
+      id: r.id,
+      tenantId: r.tenantId,
+      name: r.name,
+      description: r.description,
+      status: r.status as KnowledgeSource['status'],
+      documentCount: r.documentCount,
+      config: {
+        webhookUrl: (cfg.webhookUrl as string) ?? null,
+        hasToken: !!cfg.webhookTokenEncrypted,
+      },
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }
+  })
 }
 
 export default async function KnowledgeSourcesPage({
