@@ -175,6 +175,7 @@ export async function POST(request: NextRequest) {
     const input = doc.runInput as { uploadedBy?: string } ?? {}
     try {
       await sendRagWebhook(webhookUrl, secret, {
+        action: 'index',
         documentId,
         s3Key: doc.s3Key,
         downloadUrl,

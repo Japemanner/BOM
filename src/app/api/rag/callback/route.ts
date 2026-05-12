@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { ragDocuments, assistants, knowledgeSources } from '@/db/schema/app'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
+import { deleteS3Object } from '@/lib/s3'
 import { jwtVerify } from 'jose'
 
 const bodySchema = z.object({
   documentId: z.string().uuid(),
-  status: z.enum(['indexed', 'failed']),
+  status: z.enum(['indexed', 'failed', 'deleted']),
   error: z.string().optional(),
   meta: z.record(z.string(), z.unknown()).optional(),
 })
@@ -53,7 +54,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Resolve webhook token from assistant or knowledge source
     let webhookTokenEncrypted: string | null = null
 
     if (doc.assistantId) {
@@ -120,7 +120,6 @@ export async function POST(request: NextRequest) {
         })
         .where(eq(ragDocuments.id, documentId))
 
-      // Update knowledge source status and count if applicable
       if (doc.knowledgeSourceId) {
         await db
           .update(knowledgeSources)
@@ -129,6 +128,22 @@ export async function POST(request: NextRequest) {
             eq(knowledgeSources.id, doc.knowledgeSourceId),
             eq(knowledgeSources.status, 'processing'),
           ))
+      }
+    } else if (newStatus === 'deleted') {
+      await db.delete(ragDocuments).where(eq(ragDocuments.id, documentId))
+
+      if (doc.s3Key) {
+        try { await deleteS3Object(doc.s3Key) } catch { /* best-effort */ }
+      }
+
+      if (doc.knowledgeSourceId) {
+        await db
+          .update(knowledgeSources)
+          .set({
+            documentCount: sql`GREATEST(document_count - 1, 0)`,
+            updatedAt: new Date(),
+          })
+          .where(eq(knowledgeSources.id, doc.knowledgeSourceId))
       }
     } else {
       await db

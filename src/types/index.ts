@@ -109,6 +109,7 @@ export const RagDocumentStatus = {
   PROCESSING: 'processing',
   INDEXED: 'indexed',
   FAILED: 'failed',
+  DELETED: 'deleted',
 } as const
 export type RagDocumentStatus = (typeof RagDocumentStatus)[keyof typeof RagDocumentStatus]
 
@@ -148,3 +149,10 @@ export const PermissionAction = {
   MANAGE: 'manage',
 } as const
 export type PermissionAction = (typeof PermissionAction)[keyof typeof PermissionAction]
+
+export const RagWebhookAction = {
+  INDEX: 'index',
+  MODIFY: 'modify',
+  DELETE: 'delete',
+} as const
+export type RagWebhookAction = (typeof RagWebhookAction)[keyof typeof RagWebhookAction]

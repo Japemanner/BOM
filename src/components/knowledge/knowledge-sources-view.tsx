@@ -112,13 +112,6 @@ function EditModal({
   )
 }
 
-const DOC_STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  uploaded:   { label: 'Geupload',   color: '#9CA3AF', bg: '#F3F4F6' },
-  processing: { label: 'Verwerken',  color: '#F59E0B', bg: '#FFFBEB' },
-  indexed:    { label: 'Geindexeerd', color: TEAL,      bg: '#ECFDF5' },
-  failed:     { label: 'Mislukt',    color: '#EF4444', bg: '#FEF2F2' },
-}
-
 function DetailPanel({
   source,
   onClose,
@@ -140,8 +133,23 @@ function DetailPanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [documents, setDocuments] = useState<RagDocument[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
 
   const hasPendingDoc = documents.some((d) => d.status === 'uploaded' || d.status === 'processing')
+
+  const handleDeleteDocument = async (e: React.MouseEvent, docId: string, filename: string) => {
+    e.stopPropagation()
+    if (!confirm(`"${filename}" verwijderen? Het document wordt ook uit de vector store verwijderd.`)) return
+    setDeletingDocId(docId)
+    try {
+      await fetch(`/api/knowledge-sources/${source.id}/documents/${docId}`, { method: 'DELETE' })
+    } catch {
+      // herlaad bij fout
+    } finally {
+      setDeletingDocId(null)
+      void fetchDocuments()
+    }
+  }
 
   const fetchDocuments = useCallback(async () => {
     setDocsLoading(true)
@@ -276,22 +284,22 @@ function DetailPanel({
           {/* Documentenlijst */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-              Documenten
+              Geindexeerde documenten
             </p>
             {docsLoading && documents.length === 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', gap: 8 }}>
                 <Loader2 size={12} color="#9CA3AF" style={{ animation: 'spin 1s linear infinite' }} />
                 <span style={{ fontSize: 12, color: '#9CA3AF' }}>Laden...</span>
               </div>
-            ) : documents.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#C4C9D4', textAlign: 'center', padding: '16px 0' }}>
-                Nog geen documenten geupload
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {documents.map((doc) => {
-                  const docMeta = DOC_STATUS_META[doc.status] ?? DOC_STATUS_META['uploaded']!
-                  return (
+            ) : (() => {
+              const indexedDocs = documents.filter((d) => d.status === 'indexed')
+              return indexedDocs.length === 0 ? (
+                <p style={{ fontSize: 12, color: '#C4C9D4', textAlign: 'center', padding: '16px 0' }}>
+                  Nog geen documenten geindexeerd
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {indexedDocs.map((doc) => (
                     <div
                       key={doc.id}
                       style={{
@@ -300,35 +308,32 @@ function DetailPanel({
                         borderBottom: '0.5px solid #F1F5F9',
                       }}
                     >
-                      <File size={14} color="#9CA3AF" style={{ flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{
-                          fontSize: 12, color: '#0F172A', margin: 0,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>
-                          {doc.filename}
-                        </p>
-                        {doc.status === 'failed' && doc.errorMessage && (
-                          <p style={{ fontSize: 11, color: '#EF4444', margin: '2px 0 0' }}>
-                            {doc.errorMessage}
-                          </p>
-                        )}
-                      </div>
-                      <span style={{
-                        fontSize: 10, fontWeight: 500,
-                        color: docMeta.color, background: docMeta.bg,
-                        padding: '2px 7px', borderRadius: 5,
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        flexShrink: 0,
+                      <File size={14} color={TEAL} style={{ flexShrink: 0 }} />
+                      <p style={{
+                        flex: 1, minWidth: 0, fontSize: 12, color: '#0F172A', margin: 0,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: docMeta.color }} />
-                        {docMeta.label}
-                      </span>
+                        {doc.filename}
+                      </p>
+                      <button
+                        onClick={(e) => handleDeleteDocument(e, doc.id, doc.filename)}
+                        disabled={deletingDocId === doc.id}
+                        title="Verwijderen"
+                        style={{
+                          width: 22, height: 22, borderRadius: 5,
+                          border: '0.5px solid #EAECEF', background: '#F8FAFC',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, padding: 0,
+                          opacity: deletingDocId === doc.id ? 0.4 : 1,
+                        }}
+                      >
+                        <X size={12} color="#9CA3AF" />
+                      </button>
                     </div>
-                  )
-                })}
-              </div>
-            )}
+                  ))}
+                </div>
+              )
+            })()}
           </div>
         </div>
 

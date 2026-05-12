@@ -109,6 +109,7 @@ export async function sendOutboundWebhook(
 }
 
 export interface RagWebhookPayload {
+  action: 'index' | 'modify' | 'delete'
   documentId: string
   s3Key: string
   downloadUrl: string
@@ -123,8 +124,9 @@ export interface RagWebhookPayload {
 }
 
 /**
- * Roep een N8N webhook aan voor RAG document upload.
- * BOM stuurt metadata, N8N downloadt file van S3 en vectoriseert.
+ * Roep een N8N webhook aan voor RAG document bewerkingen.
+ * action: 'index' (nieuw), 'modify' (vervangen), 'delete' (verwijderen uit vector store).
+ * BOM stuurt metadata, N8N voert de corresponderende actie uit.
  * Timeout: 10s (fire-and-forget).
  */
 export async function sendRagWebhook(
