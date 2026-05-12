@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants } from '@/db/schema/app'
-import { eq } from 'drizzle-orm'
+import { assistants, assistantTenants } from '@/db/schema/app'
+import { inArray, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { AssistantStatus } from '@/types'
 import { canDo } from '@/lib/permissions'
@@ -16,11 +16,17 @@ export async function GET() {
     return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
   }
 
+  const linkedIds = db
+    .select({ assistantId: assistantTenants.assistantId })
+    .from(assistantTenants)
+    .where(eq(assistantTenants.tenantId, tenantId))
+
   try {
-    const result = await db.query.assistants.findMany({
-      where: eq(assistants.tenantId, tenantId),
-      orderBy: (a, { desc }) => [desc(a.createdAt)],
-    })
+    const result = await db
+      .select()
+      .from(assistants)
+      .where(inArray(assistants.id, linkedIds))
+      .orderBy(assistants.createdAt)
     return NextResponse.json(result)
   } catch (error) {
     console.error('[assistants GET]', error)
@@ -58,7 +64,6 @@ export async function POST(request: NextRequest) {
     const [created] = await db
       .insert(assistants)
       .values({
-        tenantId,
         name,
         description,
         type,
@@ -70,6 +75,11 @@ export async function POST(request: NextRequest) {
     if (!created) {
       return NextResponse.json({ error: 'Fout bij aanmaken' }, { status: 500 })
     }
+
+    await db.insert(assistantTenants).values({
+      assistantId: created.id,
+      tenantId,
+    })
 
     const { webhookTokenEncrypted: _wte, ...safe } = created
     void _wte

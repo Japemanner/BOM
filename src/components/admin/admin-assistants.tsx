@@ -13,7 +13,6 @@ interface Assistant {
   description: string
   type: string
   status: AssistantStatus
-  tenantId: string
   createdAt: string
   updatedAt?: string
   webhookUrl: string | null
@@ -35,9 +34,15 @@ interface Tenant {
   plan: string
 }
 
+interface Link {
+  assistantId: string
+  tenantId: string
+}
+
 interface AdminAssistantsProps {
   assistants: Assistant[]
   tenants: Tenant[]
+  links: Link[]
   inboundTokens: InboundToken[]
 }
 
@@ -172,7 +177,7 @@ function ModalToggleRow({
 
 const TEAL = '#1D9E75'
 
-export function AdminAssistants({ assistants: initial, tenants, inboundTokens: initialTokens }: AdminAssistantsProps) {
+export function AdminAssistants({ assistants: initial, tenants, links: initialLinks, inboundTokens: initialTokens }: AdminAssistantsProps) {
   const [assistants, setAssistants] = useState<Assistant[]>(initial)
   const [inboundTokens, setInboundTokens] = useState<InboundToken[]>(initialTokens)
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
@@ -332,7 +337,6 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
     setLoading('save')
     try {
       if (editingId === 'new') {
-        const tenantId = tenants[0]?.id ?? '00000000-0000-0000-0000-000000000001'
         const res = await fetch('/api/assistants', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -340,7 +344,6 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
             name: form.name,
             description: form.description,
             type: form.type,
-            tenantId,
           }),
         })
         if (!res.ok) {
@@ -404,7 +407,7 @@ export function AdminAssistants({ assistants: initial, tenants, inboundTokens: i
 
   const byTenant = tenants.map((t) => ({
     tenant: t,
-    items: assistants.filter((a) => a.tenantId === t.id),
+    items: assistants.filter((a) => initialLinks.some((l) => l.assistantId === a.id && l.tenantId === t.id)),
   }))
 
   const formatDate = (iso: string) =>

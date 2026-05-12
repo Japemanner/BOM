@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, assistantKnowledgeSources, knowledgeSources } from '@/db/schema/app'
+import { assistants, assistantTenants, assistantKnowledgeSources, knowledgeSources } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { canDo } from '@/lib/permissions'
@@ -23,7 +23,11 @@ export async function GET(
   const [assistant] = await db
     .select({ id: assistants.id })
     .from(assistants)
-    .where(and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)))
+    .innerJoin(assistantTenants, and(
+      eq(assistantTenants.assistantId, assistants.id),
+      eq(assistantTenants.tenantId, tenantId),
+    ))
+    .where(eq(assistants.id, id))
     .limit(1)
 
   if (!assistant) {
@@ -78,7 +82,11 @@ export async function PATCH(
   const [assistant] = await db
     .select({ id: assistants.id })
     .from(assistants)
-    .where(and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)))
+    .innerJoin(assistantTenants, and(
+      eq(assistantTenants.assistantId, assistants.id),
+      eq(assistantTenants.tenantId, tenantId),
+    ))
+    .where(eq(assistants.id, id))
     .limit(1)
 
   if (!assistant) {

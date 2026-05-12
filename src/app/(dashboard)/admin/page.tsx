@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
 import { eq } from 'drizzle-orm'
-import { assistants, webhookTokens } from '@/db/schema/app'
+import { assistants, assistantTenants, webhookTokens } from '@/db/schema/app'
 import { tenants } from '@/db/schema/iam'
 import { AdminDashboard } from '@/components/admin/admin-dashboard'
 import type { AssistantStatus } from '@/types'
@@ -10,9 +10,8 @@ import { isUserSuperAdmin } from '@/lib/permissions'
 
 async function getData(tenantId: string) {
   try {
-    const [allAssistants, allTenants, allInboundTokens] = await Promise.all([
+    const [allAssistants, allTenants, allInboundTokens, allLinks] = await Promise.all([
       db.select().from(assistants)
-        .where(eq(assistants.tenantId, tenantId))
         .orderBy(assistants.createdAt),
       db.select().from(tenants).orderBy(tenants.name),
       db.select({
@@ -22,10 +21,14 @@ async function getData(tenantId: string) {
         createdAt: webhookTokens.createdAt,
         lastUsedAt: webhookTokens.lastUsedAt,
       }).from(webhookTokens).where(eq(webhookTokens.tenantId, tenantId)),
+      db.select({
+        assistantId: assistantTenants.assistantId,
+        tenantId: assistantTenants.tenantId,
+      }).from(assistantTenants),
     ])
-    return { allAssistants, allTenants, allInboundTokens }
+    return { allAssistants, allTenants, allInboundTokens, allLinks }
   } catch {
-    return { allAssistants: [], allTenants: [], allInboundTokens: [] }
+    return { allAssistants: [], allTenants: [], allInboundTokens: [], allLinks: [] }
   }
 }
 
@@ -57,7 +60,7 @@ export default async function AdminPage() {
     )
   }
 
-  const { allAssistants, allTenants, allInboundTokens } = await getData(
+  const { allAssistants, allTenants, allInboundTokens, allLinks } = await getData(
     result.tenantId
   )
 
@@ -73,6 +76,11 @@ export default async function AdminPage() {
   const tenantsData = allTenants.map((t) => ({
     ...t,
     createdAt: t.createdAt.toISOString(),
+  }))
+
+  const linksData = allLinks.map((l) => ({
+    assistantId: l.assistantId,
+    tenantId: l.tenantId,
   }))
 
   const inboundTokensData = allInboundTokens.map((t) => ({
@@ -91,6 +99,7 @@ export default async function AdminPage() {
         <AdminDashboard
           assistants={assistantsData}
           tenants={tenantsData}
+          links={linksData}
           inboundTokens={inboundTokensData}
           isSuperAdmin={superAdmin}
           currentUserId={result.userId}

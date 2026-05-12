@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, assistantRuns, reviewItems } from '@/db/schema/app'
-import { eq, and, gte, count } from 'drizzle-orm'
+import { assistants, assistantTenants, assistantRuns, reviewItems } from '@/db/schema/app'
+import { eq, and, gte, count, inArray } from 'drizzle-orm'
 import { AssistantStatus, ReviewStatus } from '@/types'
 import type { DashboardMetrics } from '@/types'
 import { canDo } from '@/lib/permissions'
@@ -16,6 +16,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Geen toestemming' }, { status: 403 })
   }
 
+  const linkedIds = db
+    .select({ assistantId: assistantTenants.assistantId })
+    .from(assistantTenants)
+    .where(eq(assistantTenants.tenantId, tenantId))
+
   try {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -26,22 +31,21 @@ export async function GET() {
           .select({ count: count() })
           .from(assistantRuns)
           .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
-          .where(
-            and(
-              eq(assistants.tenantId, tenantId),
-              gte(assistantRuns.createdAt, today)
-            )
-          ),
+          .innerJoin(assistantTenants, and(
+            eq(assistantTenants.assistantId, assistants.id),
+            eq(assistantTenants.tenantId, tenantId),
+          ))
+          .where(gte(assistantRuns.createdAt, today)),
         db
           .select({ count: count() })
           .from(assistants)
-          .where(eq(assistants.tenantId, tenantId)),
+          .where(inArray(assistants.id, linkedIds)),
         db
           .select({ count: count() })
           .from(assistants)
           .where(
             and(
-              eq(assistants.tenantId, tenantId),
+              inArray(assistants.id, linkedIds),
               eq(assistants.status, AssistantStatus.ACTIVE)
             )
           ),

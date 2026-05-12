@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantRuns, assistants } from '@/db/schema/app'
+import { assistantRuns, assistants, assistantTenants } from '@/db/schema/app'
 import { users } from '@/db/schema/auth'
 import { eq, and } from 'drizzle-orm'
 import { getSessionContext } from '@/lib/session'
@@ -27,12 +27,11 @@ export async function GET(
     })
     .from(assistantRuns)
     .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
-    .where(
-      and(
-        eq(assistantRuns.id, id),
-        eq(assistants.tenantId, tenantId)
-      )
-    )
+    .innerJoin(assistantTenants, and(
+      eq(assistantTenants.assistantId, assistants.id),
+      eq(assistantTenants.tenantId, tenantId),
+    ))
+    .where(eq(assistantRuns.id, id))
     .limit(1)
 
   if (!row) {

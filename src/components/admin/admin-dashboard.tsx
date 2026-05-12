@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AdminAssistants } from './admin-assistants'
 import { AdminUsers } from './admin-users'
+import { AdminTenantKoppelingen } from './admin-tenant-koppelingen'
 import type { AssistantStatus, WebhookToken } from '@/types'
 
 const TEAL = '#1D9E75'
@@ -13,7 +14,6 @@ interface Assistant {
   description: string
   type: string
   status: AssistantStatus
-  tenantId: string
   createdAt: string
   updatedAt: string
   webhookUrl: string | null
@@ -28,28 +28,39 @@ interface Tenant {
   createdAt: string
 }
 
+interface Link {
+  assistantId: string
+  tenantId: string
+}
+
 interface AdminDashboardProps {
   assistants: Assistant[]
   tenants: Tenant[]
+  links: Link[]
   inboundTokens: WebhookToken[]
   isSuperAdmin: boolean
   currentUserId: string
 }
 
-const SUBTABS = [
+const BASE_SUBTABS = [
   { id: 'assistenten', label: 'Assistenten beheer' },
   { id: 'webhooks',    label: 'Webhook tokens' },
   { id: 'gebruikers',  label: 'Gebruikers' },
 ]
 
-export function AdminDashboard({ assistants, tenants, inboundTokens, isSuperAdmin, currentUserId }: AdminDashboardProps) {
+const SUPERADMIN_SUBTAB = { id: 'koppelingen', label: 'Tenant koppelingen' }
+
+export function AdminDashboard({ assistants, tenants, links, inboundTokens, isSuperAdmin, currentUserId }: AdminDashboardProps) {
+  const subtabs = isSuperAdmin
+    ? [...BASE_SUBTABS, SUPERADMIN_SUBTAB]
+    : BASE_SUBTABS
+
   const [active, setActive] = useState('assistenten')
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* Sub-tabs */}
       <div style={{ display: 'flex', borderBottom: '0.5px solid #EAECEF', marginBottom: 24 }}>
-        {SUBTABS.map((tab) => (
+        {subtabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActive(tab.id)}
@@ -73,11 +84,11 @@ export function AdminDashboard({ assistants, tenants, inboundTokens, isSuperAdmi
         ))}
       </div>
 
-      {/* Tab content */}
       {active === 'assistenten' && (
         <AdminAssistants
           assistants={assistants}
           tenants={tenants}
+          links={links}
           inboundTokens={inboundTokens}
         />
       )}
@@ -110,6 +121,14 @@ export function AdminDashboard({ assistants, tenants, inboundTokens, isSuperAdmi
           tenants={tenants}
           isSuperAdmin={isSuperAdmin}
           currentUserId={currentUserId}
+        />
+      )}
+
+      {active === 'koppelingen' && (
+        <AdminTenantKoppelingen
+          assistants={assistants}
+          tenants={tenants}
+          links={links}
         />
       )}
     </div>

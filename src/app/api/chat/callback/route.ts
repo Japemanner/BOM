@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantRuns } from '@/db/schema/app'
-import { assistants } from '@/db/schema/app'
+import { assistantRuns, assistants } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
@@ -15,9 +14,6 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   let step = 'init'
   try {
-    // ── Auth ──────────────────────────────────────────────────────────
-    // Callback wordt aangeroepen door N8N, niet door browser.
-    // JWT validatie volgt onderaan, na opzoeken van de run.
     step = 'parse-body'
     const rawBody: unknown = await request.json().catch(() => null)
     const parsed = bodySchema.safeParse(rawBody)
@@ -29,7 +25,6 @@ export async function POST(request: NextRequest) {
     }
     const { runId, text, meta } = parsed.data
 
-    // ── Haal run + assistant op (tenant isolatie) ─────────────────────
     step = 'fetch-run'
     const [run] = await db
       .select({
@@ -37,8 +32,7 @@ export async function POST(request: NextRequest) {
         assistantId: assistantRuns.assistantId,
         status: assistantRuns.status,
         runInput: assistantRuns.input,
-        tenantId: assistants.tenantId,
-        webhookTokenEncrypted: assistants.webhookTokenEncrypted,
+        tokenEncrypted: assistants.webhookTokenEncrypted,
       })
       .from(assistantRuns)
       .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
@@ -56,7 +50,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!run.webhookTokenEncrypted) {
+    if (!run.tokenEncrypted) {
       return NextResponse.json(
         { error: 'Assistent heeft geen webhook secret geconfigureerd' },
         { status: 500 }
@@ -73,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     let secret: string
     try {
-      secret = decrypt(run.webhookTokenEncrypted)
+      secret = decrypt(run.tokenEncrypted)
     } catch {
       return NextResponse.json({ error: 'Webhook secret decryptie mislukt' }, { status: 500 })
     }
@@ -128,3 +122,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

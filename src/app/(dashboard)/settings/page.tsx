@@ -1,18 +1,23 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { db } from '@/db'
-import { eq } from 'drizzle-orm'
-import { assistants } from '@/db/schema/app'
+import { eq, inArray } from 'drizzle-orm'
+import { assistants, assistantTenants } from '@/db/schema/app'
 import { SettingsTabs } from '@/components/settings/settings-tabs'
 import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
 
 async function getData(tenantId: string) {
   try {
+    const linkedIds = db
+      .select({ assistantId: assistantTenants.assistantId })
+      .from(assistantTenants)
+      .where(eq(assistantTenants.tenantId, tenantId))
+
     const allAssistants = await db
       .select()
       .from(assistants)
-      .where(eq(assistants.tenantId, tenantId))
+      .where(inArray(assistants.id, linkedIds))
       .orderBy(assistants.createdAt)
     return { allAssistants }
   } catch {

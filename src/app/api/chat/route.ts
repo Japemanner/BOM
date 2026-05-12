@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, assistantRuns, assistantKnowledgeSources, knowledgeSources, ragDocuments } from '@/db/schema/app'
+import { assistants, assistantTenants, assistantRuns, assistantKnowledgeSources, knowledgeSources, ragDocuments } from '@/db/schema/app'
 import { tenants } from '@/db/schema/iam'
 import { users } from '@/db/schema/auth'
 import { eq, and } from 'drizzle-orm'
@@ -50,13 +50,12 @@ export async function POST(request: NextRequest) {
     }
     const { assistantId, message, history } = parsed.data
 
-    // ── Haal assistent op ──────────────────────────────────────────
+    // ── Haal assistent + eerste tenant op ───────────────────────────
     step = 'fetch-assistant'
     const [assistant] = await db
       .select({
         id: assistants.id,
         name: assistants.name,
-        tenantId: assistants.tenantId,
         webhookUrl: assistants.webhookUrl,
         webhookTokenEncrypted: assistants.webhookTokenEncrypted,
       })
@@ -68,11 +67,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Assistent niet gevonden' }, { status: 404 })
     }
 
-    // ── Tenant-isolatie ──────────────────────────────────────────────
-    step = 'tenant-check'
-    if (!assistant.tenantId) {
-      return NextResponse.json({ error: 'Assistent heeft geen tenant' }, { status: 500 })
+    // ── Haal eerste tenant op voor deze assistent ──────────────────────
+    step = 'fetch-tenant'
+    const [at] = await db
+      .select({ tenantId: assistantTenants.tenantId })
+      .from(assistantTenants)
+      .where(eq(assistantTenants.assistantId, assistantId))
+      .limit(1)
+
+    if (!at) {
+      return NextResponse.json({ error: 'Assistent niet gekoppeld aan een tenant' }, { status: 500 })
     }
+
+    const tenantId = at.tenantId
 
     // ── Webhook config check ─────────────────────────────────────────
     step = 'webhook-config-check'
@@ -90,7 +97,7 @@ export async function POST(request: NextRequest) {
       .values({
         assistantId,
         status: 'running',
-        input: { message, history, historyLength: history.length, userId, tenantId: assistant.tenantId },
+        input: { message, history, historyLength: history.length, userId, tenantId },
       })
       .returning({ id: assistantRuns.id })
 
@@ -99,7 +106,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Fout bij aanmaken run' }, { status: 500 })
     }
 
-    const traceId = `${assistant.tenantId}-${runId}`
+    const traceId = `${tenantId}-${runId}`
 
     // ── Haal namen op voor payload ────────────────────────────────────
     step = 'fetch-names'
@@ -108,7 +115,7 @@ export async function POST(request: NextRequest) {
       const [tenant] = await db
         .select({ name: tenants.name })
         .from(tenants)
-        .where(eq(tenants.id, assistant.tenantId))
+        .where(eq(tenants.id, tenantId))
         .limit(1)
       if (tenant?.name) tenantName = tenant.name
     } catch {
@@ -193,7 +200,7 @@ export async function POST(request: NextRequest) {
         history,
         assistantId,
         assistantName: assistant.name,
-        tenantId: assistant.tenantId,
+        tenantId: tenantId,
         tenantName,
         userId,
         userName,
@@ -234,3 +241,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

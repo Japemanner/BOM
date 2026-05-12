@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistants, knowledgeSources, ragDocuments } from '@/db/schema/app'
+import { assistants, assistantTenants, knowledgeSources, ragDocuments } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getPresignedUploadUrl, buildS3Key, buildKnowledgeS3Key } from '@/lib/s3'
@@ -58,10 +58,11 @@ export async function POST(request: NextRequest) {
       const [assistant] = await db
         .select({
           id: assistants.id,
-          tenantId: assistants.tenantId,
+          tenantId: assistantTenants.tenantId,
           config: assistants.config,
         })
         .from(assistants)
+        .innerJoin(assistantTenants, eq(assistants.id, assistantTenants.assistantId))
         .where(eq(assistants.id, assistantId))
         .limit(1)
 
@@ -152,3 +153,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

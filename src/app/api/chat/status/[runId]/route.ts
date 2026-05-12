@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantRuns, assistants } from '@/db/schema/app'
+import { assistantRuns } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
@@ -20,7 +20,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     step = 'resolve-params'
     const { runId } = await params
 
-    // ── Haal run op met tenant isolatie via assistent join ──────────
     step = 'fetch-run'
     const [run] = await db
       .select({
@@ -28,11 +27,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
         status: assistantRuns.status,
         runInput: assistantRuns.input,
         runOutput: assistantRuns.output,
-        tenantId: assistants.tenantId,
         assistantId: assistantRuns.assistantId,
       })
       .from(assistantRuns)
-      .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
       .where(eq(assistantRuns.id, runId))
       .limit(1)
 

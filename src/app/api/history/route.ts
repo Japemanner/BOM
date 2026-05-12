@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantRuns, assistants } from '@/db/schema/app'
+import { assistantRuns, assistants, assistantTenants } from '@/db/schema/app'
 import { users } from '@/db/schema/auth'
-import { eq, desc, sql } from 'drizzle-orm'
+import { eq, and, desc, sql } from 'drizzle-orm'
 import { getSessionContext } from '@/lib/session'
 
 export async function GET(request: Request) {
@@ -10,25 +10,22 @@ export async function GET(request: Request) {
   if (ctx instanceof NextResponse) return ctx
   const { tenantId } = ctx
 
-  // Parse query params
   const { searchParams } = new URL(request.url)
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
   const limit = Math.min(50, Math.max(1, Number(searchParams.get('limit') ?? '20')))
   const offset = (page - 1) * limit
 
-  // ── Count total ──────────────────────────────────────────
-  // Tenant isolatie via join op assistants (niet via run.tenantId)
   const [countRes] = await db
     .select({ count: sql`count(*)`.mapWith(Number) })
     .from(assistantRuns)
     .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
-    .where(eq(assistants.tenantId, tenantId))
+    .innerJoin(assistantTenants, and(
+      eq(assistantTenants.assistantId, assistants.id),
+      eq(assistantTenants.tenantId, tenantId),
+    ))
 
   const total = Number(countRes?.count ?? 0)
 
-  // ── Fetch page ───────────────────────────────────────────
-  // NOTE: we lezen userId uit JSON input kolom omdat run.userId
-  // mogelijk nog niet bestaat op productie (migratie 0007)
   const rows = await db
     .select({
       id: assistantRuns.id,
@@ -41,7 +38,10 @@ export async function GET(request: Request) {
     })
     .from(assistantRuns)
     .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
-    .where(eq(assistants.tenantId, tenantId))
+    .innerJoin(assistantTenants, and(
+      eq(assistantTenants.assistantId, assistants.id),
+      eq(assistantTenants.tenantId, tenantId),
+    ))
     .orderBy(desc(assistantRuns.createdAt))
     .limit(limit)
     .offset(offset)

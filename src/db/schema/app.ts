@@ -7,9 +7,6 @@ export const appSchema = pgSchema('app')
 
 export const assistants = appSchema.table('assistants', {
   id: uuid('id').defaultRandom().primaryKey(),
-  tenantId: uuid('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description').notNull().default(''),
   type: text('type').notNull(),
@@ -20,6 +17,18 @@ export const assistants = appSchema.table('assistants', {
   webhookUrl: text('webhook_url'),
   webhookTokenEncrypted: text('webhook_token_encrypted'),
 })
+
+export const assistantTenants = appSchema.table('assistant_tenants', {
+  assistantId: uuid('assistant_id')
+    .notNull()
+    .references(() => assistants.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  pk: { primaryKey: { columns: [table.assistantId, table.tenantId] } },
+}))
 
 export const assistantRuns = appSchema.table('assistant_runs', {
   id: uuid('id').defaultRandom().primaryKey(),

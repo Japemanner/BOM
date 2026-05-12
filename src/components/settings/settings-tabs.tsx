@@ -7,7 +7,7 @@ import type { AssistantStatus } from '@/types'
 const TEAL = '#1D9E75'
 
 interface SettingsTabsProps {
-  assistants: { id: string; name: string; description: string; type: string; status: string; tenantId: string; createdAt: string; updatedAt: string; webhookUrl: string | null }[]
+  assistants: { id: string; name: string; description: string; type: string; status: string; createdAt: string; updatedAt: string; webhookUrl: string | null }[]
 }
 
 const TABS = [
@@ -26,7 +26,6 @@ export function SettingsTabs({ assistants }: SettingsTabsProps) {
     status: a.status as AssistantStatus,
     runsToday: 0,
     source: 'db' as const,
-    tenantId: a.tenantId,
   }))
 
   return (

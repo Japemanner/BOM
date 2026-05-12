@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { knowledgeSources, assistants, assistantKnowledgeSources } from '@/db/schema/app'
+import { knowledgeSources, assistants, assistantTenants, assistantKnowledgeSources } from '@/db/schema/app'
 import { and, eq } from 'drizzle-orm'
 import { canDo } from '@/lib/permissions'
 import { getSessionContext } from '@/lib/session'
@@ -39,12 +39,11 @@ export async function GET(
       })
       .from(assistantKnowledgeSources)
       .innerJoin(assistants, eq(assistantKnowledgeSources.assistantId, assistants.id))
-      .where(
-        and(
-          eq(assistantKnowledgeSources.knowledgeSourceId, id),
-          eq(assistants.tenantId, tenantId),
-        )
-      )
+      .innerJoin(assistantTenants, and(
+        eq(assistantTenants.assistantId, assistants.id),
+        eq(assistantTenants.tenantId, tenantId),
+      ))
+      .where(eq(assistantKnowledgeSources.knowledgeSourceId, id))
 
     return NextResponse.json(result)
   } catch (error) {

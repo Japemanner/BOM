@@ -4,8 +4,8 @@ import type { MetricsData } from '@/components/dashboard/metrics-strip'
 import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
 import { db } from '@/db'
-import { assistants, assistantRuns, reviewItems, assistantKnowledgeSources, knowledgeSources } from '@/db/schema/app'
-import { eq, and, gte, count } from 'drizzle-orm'
+import { assistants, assistantTenants, assistantRuns, reviewItems, assistantKnowledgeSources, knowledgeSources } from '@/db/schema/app'
+import { eq, and, gte, count, inArray } from 'drizzle-orm'
 
 interface AssistantRow {
   id: string
@@ -19,24 +19,37 @@ interface AssistantRow {
   knowledgeSources: { id: string; name: string }[]
 }
 
+function linkedIds(tenantId: string) {
+  return db
+    .select({ assistantId: assistantTenants.assistantId })
+    .from(assistantTenants)
+    .where(eq(assistantTenants.tenantId, tenantId))
+}
+
 async function getMetrics(tenantId: string): Promise<MetricsData> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+
+  const tenantIds = linkedIds(tenantId)
 
   const [[totalRows], [activeRows], [runsRes], [reviewRes]] = await Promise.all([
     db
       .select({ count: count() })
       .from(assistants)
-      .where(eq(assistants.tenantId, tenantId)),
+      .where(inArray(assistants.id, tenantIds)),
     db
       .select({ count: count() })
       .from(assistants)
-      .where(and(eq(assistants.tenantId, tenantId), eq(assistants.status, 'active' as const))),
+      .where(and(inArray(assistants.id, tenantIds), eq(assistants.status, 'active' as const))),
     db
       .select({ count: count() })
       .from(assistantRuns)
       .innerJoin(assistants, eq(assistantRuns.assistantId, assistants.id))
-      .where(and(eq(assistants.tenantId, tenantId), gte(assistantRuns.createdAt, today))),
+      .innerJoin(assistantTenants, and(
+        eq(assistantTenants.assistantId, assistants.id),
+        eq(assistantTenants.tenantId, tenantId),
+      ))
+      .where(gte(assistantRuns.createdAt, today)),
     db
       .select({ count: count() })
       .from(reviewItems)
@@ -61,10 +74,12 @@ async function getAssistants(tenantId: string): Promise<AssistantRow[]> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  const tenantIds = linkedIds(tenantId)
+
   const rows = await db
     .select()
     .from(assistants)
-    .where(eq(assistants.tenantId, tenantId))
+    .where(inArray(assistants.id, tenantIds))
     .orderBy(assistants.createdAt)
 
   const runCounts = await db

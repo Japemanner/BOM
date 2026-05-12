@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { assistantRuns, assistants } from '@/db/schema/app'
+import { assistantRuns, assistants, assistantTenants } from '@/db/schema/app'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { decrypt } from '@/lib/crypto'
@@ -83,18 +83,24 @@ export async function POST(request: NextRequest) {
           name: assistants.name,
           webhookUrl: assistants.webhookUrl,
           webhookTokenEncrypted: assistants.webhookTokenEncrypted,
-          tenantId: assistants.tenantId,
         })
         .from(assistants)
+        .innerJoin(assistantTenants, eq(assistants.id, assistantTenants.assistantId))
         .where(eq(assistants.id, assistantId))
         .limit(1)
 
       if (assistant?.webhookUrl && assistant.webhookTokenEncrypted) {
+        const [at] = await db
+          .select({ tenantId: assistantTenants.tenantId })
+          .from(assistantTenants)
+          .where(eq(assistantTenants.assistantId, assistantId))
+          .limit(1)
+
         void fireOutboundWebhook(assistant.webhookUrl, assistant.webhookTokenEncrypted, {
           runId: run.id,
           assistantId,
           assistantName: assistant.name,
-          tenantId: assistant.tenantId,
+          tenantId: at?.tenantId ?? 'unknown',
           output,
           timestamp: new Date().toISOString(),
         })

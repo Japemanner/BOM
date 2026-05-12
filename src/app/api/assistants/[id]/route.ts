@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { assistants } from '@/db/schema/app'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { AssistantStatus } from '@/types'
 import { encrypt } from '@/lib/crypto'
 import { canDo } from '@/lib/permissions'
 import { getSessionContext } from '@/lib/session'
+import { assistantBelongsToTenant } from '@/lib/assistant-tenants'
 
 const patchSchema = z.object({
   status: z.enum([
@@ -22,6 +23,14 @@ const patchSchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Geen velden om te updaten' })
 
+async function assistantTenantCheck(id: string, tenantId: string) {
+  const belongs = await assistantBelongsToTenant(id, tenantId)
+  if (!belongs) {
+    return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
+  }
+  return null
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,9 +44,12 @@ export async function GET(
   }
 
   const { id } = await params
+  const err = await assistantTenantCheck(id, tenantId)
+  if (err) return err
+
   try {
     const assistant = await db.query.assistants.findFirst({
-      where: and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)),
+      where: eq(assistants.id, id),
     })
     if (!assistant) {
       return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
@@ -60,6 +72,12 @@ export async function PATCH(
   const { userId, tenantId } = ctx
 
   const { id } = await params
+
+  const belongs = await assistantBelongsToTenant(id, tenantId)
+  if (!belongs) {
+    return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
+  }
+
   try {
     const body: unknown = await request.json()
     const parsed = patchSchema.safeParse(body)
@@ -91,7 +109,7 @@ export async function PATCH(
     const [updated] = await db
       .update(assistants)
       .set(updateData)
-      .where(and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)))
+      .where(eq(assistants.id, id))
       .returning()
 
     if (!updated) {
@@ -120,10 +138,16 @@ export async function DELETE(
   }
 
   const { id } = await params
+
+  const belongs = await assistantBelongsToTenant(id, tenantId)
+  if (!belongs) {
+    return NextResponse.json({ error: 'Niet gevonden' }, { status: 404 })
+  }
+
   try {
     const [deleted] = await db
       .delete(assistants)
-      .where(and(eq(assistants.id, id), eq(assistants.tenantId, tenantId)))
+      .where(eq(assistants.id, id))
       .returning({ id: assistants.id })
 
     if (!deleted) {
