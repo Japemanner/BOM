@@ -168,6 +168,7 @@ export async function DELETE(
         s3Key: doc.s3Key,
         downloadUrl: '',
         filename: doc.filename,
+        filetype: (doc.metadata as Record<string, unknown>).contentType as string ?? 'application/octet-stream',
         tenantId: doc.tenantId,
         assistantId: doc.assistantId ?? undefined,
         assistantName,

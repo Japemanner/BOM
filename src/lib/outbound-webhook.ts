@@ -114,6 +114,7 @@ export interface RagWebhookPayload {
   s3Key: string
   downloadUrl: string
   filename: string
+  filetype: string
   tenantId: string
   assistantId?: string
   assistantName?: string

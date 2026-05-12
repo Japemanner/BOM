@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
         s3Key: doc.s3Key,
         downloadUrl,
         filename: doc.filename,
+        filetype: (input as Record<string, unknown>).contentType as string ?? 'application/octet-stream',
         tenantId: doc.tenantId,
         assistantId: doc.assistantId ?? undefined,
         assistantName,
