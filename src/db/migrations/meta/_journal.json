@@ -36,6 +36,8 @@
     {"idx": 7, "version": "7", "when": 1776720000000, "tag": "0007_run_user_tenant", "breakpoints": true},
     {"idx": 8, "version": "7", "when": 1776750000000, "tag": "0008_rag_documents", "breakpoints": true},
     {"idx": 9, "version": "7", "when": 1776945600000, "tag": "0009_knowledge_sources", "breakpoints": true},
-    {"idx": 10, "version": "7", "when": 1777000000000, "tag": "0010_fix_member_to_admin", "breakpoints": true}
+    {"idx": 10, "version": "7", "when": 1777000000000, "tag": "0010_fix_member_to_admin", "breakpoints": true},
+    {"idx": 11, "version": "7", "when": 1777080000000, "tag": "0011_assistant_tenants", "breakpoints": true},
+    {"idx": 12, "version": "7", "when": 1777090000000, "tag": "0012_assistant_tenants_idempotent", "breakpoints": true}
   ]
 }

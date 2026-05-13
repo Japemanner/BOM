@@ -5,7 +5,7 @@ import type { AssistantStatus } from '@/types'
 import { getSessionOutcome } from '@/lib/session'
 import { db } from '@/db'
 import { assistants, assistantTenants, assistantRuns, reviewItems, assistantKnowledgeSources, knowledgeSources } from '@/db/schema/app'
-import { eq, and, gte, count, inArray, sql } from 'drizzle-orm'
+import { eq, and, gte, count, inArray } from 'drizzle-orm'
 
 interface AssistantRow {
   id: string
@@ -24,23 +24,6 @@ function linkedIds(tenantId: string) {
     .select({ assistantId: assistantTenants.assistantId })
     .from(assistantTenants)
     .where(eq(assistantTenants.tenantId, tenantId))
-}
-
-async function ensureMigration0011() {
-  try {
-    const check = await db.execute(sql`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'app' AND table_name = 'assistant_tenants')`);
-    const exists = check.rows[0].exists;
-    if (exists) return;
-
-    await db.execute(sql`CREATE TABLE app.assistant_tenants (assistant_id uuid NOT NULL, tenant_id uuid NOT NULL, created_at timestamp DEFAULT now() NOT NULL, CONSTRAINT assistant_tenants_pk PRIMARY KEY (assistant_id, tenant_id))`);
-    await db.execute(sql`INSERT INTO app.assistant_tenants (assistant_id, tenant_id, created_at) SELECT id, tenant_id, created_at FROM app.assistants WHERE tenant_id IS NOT NULL`);
-    await db.execute(sql`ALTER TABLE app.assistant_tenants ADD CONSTRAINT assistant_tenants_assistant_id_fk FOREIGN KEY (assistant_id) REFERENCES app.assistants(id) ON DELETE CASCADE`);
-    await db.execute(sql`ALTER TABLE app.assistant_tenants ADD CONSTRAINT assistant_tenants_tenant_id_fk FOREIGN KEY (tenant_id) REFERENCES iam.tenants(id) ON DELETE CASCADE`);
-    await db.execute(sql`ALTER TABLE app.assistants DROP CONSTRAINT IF EXISTS assistants_tenant_id_tenants_id_fk`);
-    await db.execute(sql`ALTER TABLE app.assistants DROP COLUMN IF EXISTS tenant_id`);
-  } catch {
-    // stil falen als al bestaat of DB niet bereikbaar
-  }
 }
 
 async function getMetrics(tenantId: string): Promise<MetricsData> {
@@ -143,8 +126,6 @@ async function getAssistants(tenantId: string): Promise<AssistantRow[]> {
 }
 
 export default async function DashboardPage() {
-  await ensureMigration0011();
-
   const result = await getSessionOutcome()
 
   if (!result.ok) {
