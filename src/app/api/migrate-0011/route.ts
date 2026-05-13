@@ -1,7 +1,7 @@
 export async function GET() {
   try {
-    const { db, sql } = await import('@/db');
-    const { eq } = await import('drizzle-orm');
+    const { db } = await import('@/db');
+    const { sql } = await import('drizzle-orm');
 
     const results: string[] = [];
 
