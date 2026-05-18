@@ -19,6 +19,7 @@ const PERMISSIONS = [
   { id: 'integrations.create',       resource: 'integrations', action: 'create',             description: 'Integratie aanmaken' },
   { id: 'integrations.update',       resource: 'integrations', action: 'update',             description: 'Integratie bewerken' },
   { id: 'integrations.delete',       resource: 'integrations', action: 'delete',             description: 'Integratie verwijderen' },
+  { id: 'tenant.create',             resource: 'tenant',       action: 'create',             description: 'Tenant aanmaken' },
   { id: 'tenant.read',               resource: 'tenant',       action: 'read',               description: 'Tenant-info bekijken' },
   { id: 'tenant.update_plan',        resource: 'tenant',       action: 'update_plan',        description: 'Abonnement wijzigen' },
   { id: 'tenant.delete',             resource: 'tenant',       action: 'delete',             description: 'Tenant verwijderen' },
